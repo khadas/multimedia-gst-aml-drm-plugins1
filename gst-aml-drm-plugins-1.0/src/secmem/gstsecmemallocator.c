@@ -12,10 +12,6 @@
 #include "gstsecmemallocator.h"
 #include "secmem_ca.h"
 
-//TODO:
-//Implement a real dma buffer in future.
-#define SECMEM_DMA 1
-
 GST_DEBUG_CATEGORY_STATIC (gst_secmem_allocator_debug);
 #define GST_CAT_DEFAULT gst_secmem_allocator_debug
 
@@ -81,7 +77,6 @@ void gst_secmem_allocator_finalize(GObject *object)
     }
 }
 
-#if SECMEM_DMA
 GstMemory *
 gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     GstAllocationParams * params)
@@ -91,6 +86,7 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     int fd;
     secmem_handle_t handle;
     unsigned int ret;
+    uint32_t maxsize;
 
     g_return_val_if_fail (GST_IS_SECMEM_ALLOCATOR (allocator), NULL);
     g_return_val_if_fail(self->sess != NULL, NULL);
@@ -107,17 +103,17 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
         goto error_alloc;
     }
 
-    ret = Secure_V2_MemExport(self->sess, handle, &fd);
+    ret = Secure_V2_MemExport(self->sess, handle, &fd, &maxsize);
     if (ret) {
         GST_ERROR("MemExport failed");
         goto error_export;
     }
-
-    mem = gst_fd_allocator_alloc(allocator, fd, size, GST_FD_MEMORY_FLAG_NONE);
+    mem = gst_fd_allocator_alloc(allocator, fd, maxsize, GST_FD_MEMORY_FLAG_NONE);
     if (!mem) {
         GST_ERROR("gst_fd_allocator_alloc failed");
         goto error_export;
     }
+    mem->size = size;
     GST_INFO("alloc dma %d", fd);
     return mem;
 
@@ -128,45 +124,7 @@ error_alloc:
 error_create:
     return NULL;
 }
-#else
-GstMemory *
-gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
-    GstAllocationParams * params)
-{
-    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (allocator);
-    GstSecmemMemory *mem = NULL;
-    unsigned int ret;
 
-    g_return_val_if_fail (GST_IS_SECMEM_ALLOCATOR (allocator), NULL);
-    g_return_val_if_fail(self->sess != NULL, NULL);
-
-    mem = g_slice_new0 (GstSecmemMemory);
-    gst_memory_init (GST_MEMORY_CAST (mem), 0, GST_ALLOCATOR_CAST (allocator),
-          NULL, size, 0, 0, size);
-
-    ret = Secure_V2_MemCreate(self->sess, &mem->handle);
-    if (ret) {
-        GST_ERROR("MemCreate failed");
-        goto error_create;
-    }
-    ret = Secure_V2_MemAlloc(self->sess, mem->handle, size, &mem->phyaddr);
-    if (ret) {
-        GST_ERROR("MemAlloc failed");
-        goto error_alloc;
-    }
-    GST_INFO("alloc %x", mem->handle);
-    return (GstMemory *)mem;
-
-error_alloc:
-    Secure_V2_MemRelease(self->sess, mem->handle);
-error_create:
-    g_slice_free(GstSecmemMemory, mem);
-    return NULL;
-}
-#endif
-
-
-#if SECMEM_DMA
 void
 gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
 {
@@ -178,30 +136,6 @@ gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
     Secure_V2_MemFree(self->sess, handle);
     Secure_V2_MemRelease(self->sess, handle);
 }
-#else
-void
-gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
-{
-    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (allocator);
-    GstSecmemMemory *mem = (GstSecmemMemory *)memory;
-    secmem_paddr_t phyaddr;
-    unsigned int ret;
-
-    ret = Secure_V2_MemFree(self->sess, mem->handle);
-    if (!ret) {
-        ret = Secure_V2_MemToPhy(self->sess, mem->handle, &phyaddr);
-        if (!ret && phyaddr) {
-            GST_ERROR("free failed");
-            goto error;
-        }
-        Secure_V2_MemRelease(self->sess, mem->handle);
-    }
-    g_slice_free(GstSecmemMemory, mem);
-    GST_INFO("freed %x", mem->handle);
-error:
-    return;
-}
-#endif
 
 
 gpointer
@@ -250,7 +184,7 @@ gst_is_secmem_memory (GstMemory *mem)
 }
 
 gboolean
-gst_secmem_fill(GstMemory *mem, uint8_t *buffer, uint32_t offset, uint32_t length)
+gst_secmem_fill(GstMemory *mem, uint32_t offset, uint8_t *buffer, uint32_t length)
 {
     uint32_t ret;
     uint32_t handle;
@@ -258,7 +192,7 @@ gst_secmem_fill(GstMemory *mem, uint8_t *buffer, uint32_t offset, uint32_t lengt
     g_return_val_if_fail(handle != 0, FALSE);
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
-    ret = Secure_V2_MemFill(self->sess, handle, buffer, offset, length);
+    ret = Secure_V2_MemFill(self->sess, handle, offset, buffer, length);
     g_return_val_if_fail(ret == 0, FALSE);
     return TRUE;
 }
@@ -281,14 +215,46 @@ gst_secmem_prepend_csd(GstMemory *mem)
 {
     uint32_t ret;
     uint32_t handle;
-    uint32_t csdlen;
+    uint32_t csdlen = 0;
+    gsize memsize, offset, maxsize;
     handle = gst_secmem_memory_get_handle(mem);
     g_return_val_if_fail(handle != 0, FALSE);
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    memsize = gst_memory_get_sizes(mem, &offset, &maxsize);
     ret = Secure_V2_MergeCsdData(self->sess, handle, &csdlen);
     g_return_val_if_fail(ret == 0, FALSE);
     g_return_val_if_fail(csdlen > 0, FALSE);
+    g_return_val_if_fail(memsize + csdlen < maxsize, FALSE);
+    mem->size += csdlen;
+    return TRUE;
+}
+
+gboolean
+gst_secmem_parse_avcc(GstMemory *mem, uint8_t *buffer, uint32_t length)
+{
+    uint32_t ret;
+    g_return_val_if_fail(mem != NULL, -1);
+    g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), -1);
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_Parse(self->sess, STREAM_TYPE_AVCC, 0, buffer, length, NULL);
+    g_return_val_if_fail(ret == 0, FALSE);
+
+    return TRUE;
+}
+
+gboolean
+gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag)
+{
+    uint32_t ret;
+    uint32_t handle;
+
+    handle = gst_secmem_memory_get_handle(mem);
+    g_return_val_if_fail(handle != 0, FALSE);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_Parse(self->sess, STREAM_TYPE_AVC2NALU, handle, NULL, 0, flag);
+    g_return_val_if_fail(ret == 0, FALSE);
     return TRUE;
 }
 
@@ -296,26 +262,20 @@ secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem)
 {
     g_return_val_if_fail(mem != NULL, 0);
     g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), 0);
-#if SECMEM_DMA
+
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     int fd = gst_fd_memory_get_fd(mem);
     secmem_handle_t handle = Secure_V2_FdToHandle(self->sess, fd);
     return handle;
-#else
-    return ((GstSecmemMemory *)mem)->handle;
-#endif
 }
 
 secmem_paddr_t gst_secmem_memory_get_paddr (GstMemory *mem)
 {
     g_return_val_if_fail(mem != NULL, -1);
     g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), -1);
-#if SECMEM_DMA
+
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     int fd = gst_fd_memory_get_fd(mem);
     secmem_paddr_t paddr = Secure_V2_FdToPaddr(self->sess, fd);
     return paddr;
-#else
-    return ((GstSecmemMemory *)mem)->phyaddr;
-#endif
 }

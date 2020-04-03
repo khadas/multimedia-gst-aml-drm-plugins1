@@ -25,7 +25,8 @@
 #ifdef HAVE_CONFIG_H
 #  include "config.h"
 #endif
-
+#include <stdio.h>
+#include <stdlib.h>
 #include <gst/base/base.h>
 #include <gst/pbutils/pbutils.h>
 #include <gst/video/video.h>
@@ -1069,17 +1070,6 @@ gst_h264_sec_parse_collect_nal (GstH264SecParse * h264parse, const guint8 * data
   return complete;
 }
 
-#if 0
-static guint8 au_delim[6] = {
-  0x00, 0x00, 0x00, 0x01,       /* nal prefix */
-  0x09,                         /* nal unit type = access unit delimiter */
-  0xf0                          /* allow any slice type */
-};
-#endif
-
-static uint8_t nal_sc_3[3] = {0, 0, 1};
-static uint8_t nal_sc_4[4] = {0, 0, 0, 1};
-
 static GstFlowReturn
 gst_h264_sec_parse_handle_frame_packetized (GstBaseParse * parse,
     GstBaseParseFrame * frame)
@@ -1087,12 +1077,10 @@ gst_h264_sec_parse_handle_frame_packetized (GstBaseParse * parse,
   GstH264SecParse *h264parse = GST_H264_SEC_PARSE (parse);
   GstBuffer *buffer = frame->buffer;
   GstFlowReturn ret = GST_FLOW_OK;
-  //GstH264ParserResult parse_res;
-  //GstH264NalUnit nalu;
   const guint nl = h264parse->nal_length_size;
-  //GstMapInfo map;
   gint left = 0;
   gsize size = gst_buffer_get_size(buffer);
+  uint32_t flag;
 
   if (nl < 1 || nl > 4) {
     GST_DEBUG_OBJECT (h264parse, "insufficient data to split input");
@@ -1102,61 +1090,6 @@ gst_h264_sec_parse_handle_frame_packetized (GstBaseParse * parse,
   /* need to save buffer from invalidation upon _finish_frame */
   if (h264parse->split_packetized)
     buffer = gst_buffer_copy (frame->buffer);
-
-#if 0
-  gst_buffer_map (buffer, &map, GST_MAP_READ);
-
-  left = map.size;
-
-  GST_LOG_OBJECT (h264parse,
-      "processing packet buffer of size %" G_GSIZE_FORMAT, map.size);
-
-  parse_res = gst_h264_parser_identify_nalu_avc (h264parse->nalparser,
-      map.data, 0, map.size, nl, &nalu);
-
-  while (parse_res == GST_H264_PARSER_OK) {
-    GST_DEBUG_OBJECT (h264parse, "AVC nal offset %d", nalu.offset + nalu.size);
-
-    /* either way, have a look at it */
-    gst_h264_sec_parse_process_nal (h264parse, &nalu);
-
-    /* dispatch per NALU if needed */
-    if (h264parse->split_packetized) {
-      GstBaseParseFrame tmp_frame;
-
-      gst_base_parse_frame_init (&tmp_frame);
-      tmp_frame.flags |= frame->flags;
-      tmp_frame.offset = frame->offset;
-      tmp_frame.overhead = frame->overhead;
-      tmp_frame.buffer = gst_buffer_copy_region (buffer, GST_BUFFER_COPY_ALL,
-          nalu.offset, nalu.size);
-
-      /* note we don't need to come up with a sub-buffer, since
-       * subsequent code only considers input buffer's metadata.
-       * Real data is either taken from input by baseclass or
-       * a replacement output buffer is provided anyway. */
-      gst_h264_sec_parse_parse_frame (parse, &tmp_frame);
-      ret = gst_base_parse_finish_frame (parse, &tmp_frame, nl + nalu.size);
-      left -= nl + nalu.size;
-    }
-
-    parse_res = gst_h264_parser_identify_nalu_avc (h264parse->nalparser,
-        map.data, nalu.offset + nalu.size, map.size, nl, &nalu);
-  }
-
-  gst_buffer_unmap (buffer, &map);
-#else
-  /* replace first nl bytes to start code. */
-  gboolean rc = FALSE;
-  GstMemory* mem = gst_buffer_get_memory(buffer, 0);
-  if (nl == 3)
-      rc = gst_secmem_fill(mem, nal_sc_3, 0, 3);
-  else if (nl == 4)
-      rc = gst_secmem_fill(mem, nal_sc_4, 0, 4);
-  gst_memory_unref(mem);
-  if (!rc)
-    GST_ERROR_OBJECT(parse, "gst_secmem_fill fail");
-#endif
 
   if (!h264parse->split_packetized) {
     gst_h264_sec_parse_parse_frame (parse, frame);
@@ -1170,22 +1103,6 @@ gst_h264_sec_parse_handle_frame_packetized (GstBaseParse * parse,
       ret = gst_base_parse_finish_frame (parse, frame, size);
     }
   }
-
-#if 0
-  if (parse_res == GST_H264_PARSER_NO_NAL_END ||
-      parse_res == GST_H264_PARSER_BROKEN_DATA) {
-
-    if (h264parse->split_packetized) {
-      GST_ELEMENT_ERROR (h264parse, STREAM, FAILED, (NULL),
-          ("invalid AVC input data"));
-
-      return GST_FLOW_ERROR;
-    } else {
-      /* do not meddle to much in this case */
-      GST_DEBUG_OBJECT (h264parse, "parsing packet failed");
-    }
-  }
-#endif
 
   return ret;
 }
@@ -2095,6 +2012,11 @@ gst_h264_sec_parse_update_src_caps (GstH264SecParse * h264parse, GstCaps * caps)
   }
 
   if (caps) {
+    guint size = gst_caps_get_size(caps);
+    for (unsigned i = 0; i < size; ++i) {
+      gst_caps_set_features(caps, i, NULL);
+    }
+
     gst_caps_set_simple (caps, "parsed", G_TYPE_BOOLEAN, TRUE,
         "stream-format", G_TYPE_STRING,
         gst_h264_sec_parse_get_string (h264parse, TRUE, h264parse->format),
@@ -2314,7 +2236,7 @@ gst_h264_sec_parse_parse_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
   if (h264parse->do_ts)
     gst_h264_sec_parse_get_timestamp (h264parse,
         &GST_BUFFER_TIMESTAMP (buffer), &GST_BUFFER_DURATION (buffer),
-        h264parse->frame_start);
+        TRUE);
 
   if (h264parse->keyframe)
     GST_BUFFER_FLAG_UNSET (buffer, GST_BUFFER_FLAG_DELTA_UNIT);
@@ -2470,7 +2392,6 @@ gst_h264_sec_parse_handle_sps_pps_nals (GstH264SecParse * h264parse,
   GstBuffer *codec_nal;
   gint i;
   gboolean send_done = FALSE;
-  //GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buffer);
 
   if (h264parse->have_sps_in_frame && h264parse->have_pps_in_frame) {
     GST_DEBUG_OBJECT (h264parse, "SPS/PPS exist in frame, will not insert");
@@ -2478,9 +2399,9 @@ gst_h264_sec_parse_handle_sps_pps_nals (GstH264SecParse * h264parse,
   }
 
   if (h264parse->align == GST_H264_SEC_PARSE_ALIGN_NAL) {
-    //TODO(Song)
-    /* send separate config NAL buffers */
 #if 0
+    GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buffer);
+    /* send separate config NAL buffers */
     GST_DEBUG_OBJECT (h264parse, "- sending SPS/PPS");
     for (i = 0; i < GST_H264_MAX_SPS_COUNT; i++) {
       if ((codec_nal = h264parse->sps_nals[i])) {
@@ -2500,86 +2421,41 @@ gst_h264_sec_parse_handle_sps_pps_nals (GstH264SecParse * h264parse,
   } else {
     /* insert config NALs into AU */
     GstByteWriter bw;
-    GstBuffer *new_buf;
-    const gboolean bs = h264parse->format == GST_H264_SEC_PARSE_FORMAT_BYTE;
-    const gint nls = 4 - h264parse->nal_length_size;
-    gboolean ok;
+    guint8 * data;
+    guint header_size = 0;
+    gboolean ok = FALSE;
 
-    gst_byte_writer_init_with_size (&bw, gst_buffer_get_size (buffer), FALSE);
-    ok = gst_byte_writer_put_buffer (&bw, buffer, 0, h264parse->idr_pos);
-    GST_DEBUG_OBJECT (h264parse, "- inserting SPS/PPS");
+    gst_byte_writer_init(&bw);
+    GST_DEBUG_OBJECT (h264parse, "- inserting SPS/PPS bs");
     for (i = 0; i < GST_H264_MAX_SPS_COUNT; i++) {
       if ((codec_nal = h264parse->sps_nals[i])) {
         gsize nal_size = gst_buffer_get_size (codec_nal);
-        GST_DEBUG_OBJECT (h264parse, "inserting SPS nal");
-        if (bs) {
-          ok &= gst_byte_writer_put_uint32_be (&bw, 1);
-        } else {
-          ok &= gst_byte_writer_put_uint32_be (&bw, (nal_size << (nls * 8)));
-          ok &= gst_byte_writer_set_pos (&bw,
-              gst_byte_writer_get_pos (&bw) - nls);
-        }
+        GST_DEBUG_OBJECT (h264parse, "inserting SPS nal %d bytes", nal_size);
+        ok &= gst_byte_writer_put_uint32_be (&bw, 1);
+        header_size += 4;
 
         ok &= gst_byte_writer_put_buffer (&bw, codec_nal, 0, nal_size);
+        header_size += nal_size;
         send_done = TRUE;
       }
     }
     for (i = 0; i < GST_H264_MAX_PPS_COUNT; i++) {
       if ((codec_nal = h264parse->pps_nals[i])) {
         gsize nal_size = gst_buffer_get_size (codec_nal);
-        GST_DEBUG_OBJECT (h264parse, "inserting PPS nal");
-        if (bs) {
-          ok &= gst_byte_writer_put_uint32_be (&bw, 1);
-        } else {
-          ok &= gst_byte_writer_put_uint32_be (&bw, (nal_size << (nls * 8)));
-          ok &= gst_byte_writer_set_pos (&bw,
-              gst_byte_writer_get_pos (&bw) - nls);
-        }
+        GST_DEBUG_OBJECT (h264parse, "inserting PPS nal %d bytes", nal_size);
+        ok &= gst_byte_writer_put_uint32_be (&bw, 1);
+        header_size += 4;
+
         ok &= gst_byte_writer_put_buffer (&bw, codec_nal, 0, nal_size);
+        header_size += nal_size;
         send_done = TRUE;
       }
     }
-    ok &= gst_byte_writer_put_buffer (&bw, buffer, h264parse->idr_pos, -1);
     /* collect result and push */
-    new_buf = gst_byte_writer_reset_and_get_buffer (&bw);
-#if 1
-    {
-      gboolean ret;
-      GstMapInfo map;
-      GstMemory* mem = gst_buffer_get_memory(buffer, 0);
-
-      gst_buffer_map(new_buf, &map, GST_MAP_READ);
-      ret = gst_secmem_store_csd(mem, map.data, map.size);
-      gst_buffer_unmap(new_buf, &map);
-      if (!ret) {
-        gst_memory_unref(mem);
-        GST_ERROR_OBJECT(h264parse, "gst_secmem_store_csd failed");
-        return FALSE;
-      }
-      /* merge csd and 1st frame */
-      GST_DEBUG_OBJECT(h264parse, "prepend csd to 1st frame");
-      ret = gst_secmem_prepend_csd(mem);
-      if (!ret) {
-        gst_memory_unref(mem);
-        GST_ERROR_OBJECT(h264parse, "gst_secmem_prepend_csd failed");
-        return FALSE;
-      }
-      gst_memory_unref(mem);
-    }
-#else
-    gst_buffer_copy_into (new_buf, buffer, GST_BUFFER_COPY_METADATA, 0, -1);
-    /* should already be keyframe/IDR, but it may not have been,
-     * so mark it as such to avoid being discarded by picky decoder */
-    GST_BUFFER_FLAG_UNSET (new_buf, GST_BUFFER_FLAG_DELTA_UNIT);
-    gst_buffer_replace (&frame->out_buffer, new_buf);
-#endif
-    gst_buffer_unref (new_buf);
-    /* some result checking seems to make some compilers happy */
-    if (G_UNLIKELY (!ok)) {
-      GST_ERROR_OBJECT (h264parse, "failed to insert SPS/PPS");
-    }
+    data = gst_byte_writer_reset_and_get_data(&bw);
+    //TODO:can possible use SPS/PPS here
+    g_free (data);
   }
-
   return send_done;
 }
 
@@ -2589,7 +2465,7 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
   GstH264SecParse *h264parse;
   GstBuffer *buffer;
   GstEvent *event;
-  GstMemory* mem;
+  GstFlowReturn ret;
 
   h264parse = GST_H264_SEC_PARSE (parse);
 
@@ -2621,44 +2497,54 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
     h264parse->sent_codec_tag = TRUE;
   }
 
-#if 0
-  /* In case of byte-stream, insert au delimeter by default
-   * if it doesn't exist */
-  if (h264parse->aud_insert && h264parse->format == GST_H264_SEC_PARSE_FORMAT_BYTE) {
-    if (h264parse->align == GST_H264_SEC_PARSE_ALIGN_AU) {
-      GstMemory *mem =
-          gst_memory_new_wrapped (GST_MEMORY_FLAG_READONLY, (guint8 *) au_delim,
-          sizeof (au_delim), 0, sizeof (au_delim), NULL, NULL);
-
-      frame->out_buffer = gst_buffer_copy (frame->buffer);
-      gst_buffer_prepend_memory (frame->out_buffer, mem);
-      if (h264parse->idr_pos >= 0)
-        h264parse->idr_pos += sizeof (au_delim);
-
-      buffer = frame->out_buffer;
-    } else {
-      GstBuffer *aud_buffer = gst_buffer_new_allocate (NULL, 2, NULL);
-      gst_buffer_fill (aud_buffer, 0, (guint8 *) (au_delim + 4), 2);
-
-      buffer = frame->buffer;
-      gst_h264_sec_parse_push_codec_buffer (h264parse, aud_buffer,
-          GST_BUFFER_TIMESTAMP (buffer));
-      gst_buffer_unref (aud_buffer);
-    }
-  } else {
-    buffer = frame->buffer;
-  }
-#else
   buffer = frame->buffer;
-#endif
+  gboolean rc = FALSE;
+  uint32_t flag;
+  GstMemory* mem;
 
   /* sanity check */
-  mem = gst_buffer_get_memory(buffer, 0);
+  mem = gst_buffer_peek_memory(buffer, 0);
   if (!gst_is_secmem_memory(mem)) {
     GST_WARNING_OBJECT (parse, "wrong memory type");
     return GST_FLOW_ERROR;
   }
-  gst_memory_unref(mem);
+
+  if (h264parse->codec_data_in) {
+    /* convert avcC format to stream header. */
+    GST_DEBUG_OBJECT(h264parse, "parse codec_data");
+    GstMapInfo map;
+    gst_buffer_map(h264parse->codec_data_in, &map, GST_MAP_READ);
+    rc = gst_secmem_parse_avcc(mem, map.data, map.size);
+    gst_buffer_unmap(h264parse->codec_data_in, &map);
+    if (!rc)
+      GST_ERROR_OBJECT(parse, "gst_secmem_parse_avcc fail");
+  }
+
+  /* convert avc format to stream format. */
+  rc = gst_secmem_parse_avc2nalu(mem, &flag);
+  if (!rc) {
+    GST_ERROR_OBJECT(parse, "gst_secmem_parse_avc2nalu fail");
+    return GST_FLOW_ERROR;
+  } else
+    GST_LOG_OBJECT(parse, "gst_secmem_parse_avc2nalu success, %x", flag);
+
+  if ((flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN))
+          && (flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN)) == 0) {
+    return GST_BASE_PARSE_FLOW_DROPPED;
+  }
+
+  if (h264parse->codec_data_in) {
+    if ((flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN)) == 0
+              && (flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
+      GST_DEBUG_OBJECT(h264parse, "prepend csd");
+      ret = gst_secmem_prepend_csd(mem);
+      if (!ret) {
+        GST_ERROR_OBJECT(h264parse, "gst_secmem_prepend_csd failed");
+        return FALSE;
+      }
+    }
+    gst_buffer_replace(&h264parse->codec_data_in, NULL);
+  }
 
 #if 0
   if (h264parse->closedcaptions_size > 0) {
@@ -2679,7 +2565,7 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
 
   //TODO(song):disable peroidic feature, but leave push_codec.
   /* periodic SPS/PPS sending */
-  if (h264parse->interval > 0 || h264parse->push_codec) {
+  if (h264parse->push_codec) {
     GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buffer);
     guint64 diff;
     gboolean initial_frame = FALSE;
@@ -2690,72 +2576,37 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
       initial_frame = TRUE;
     }
 
-    if (h264parse->idr_pos >= 0) {
-      GST_LOG_OBJECT (h264parse, "IDR nal at offset %d", h264parse->idr_pos);
+    if (timestamp > h264parse->last_report)
+      diff = timestamp - h264parse->last_report;
+    else
+      diff = 0;
 
-      if (timestamp > h264parse->last_report)
-        diff = timestamp - h264parse->last_report;
-      else
-        diff = 0;
+    GST_LOG_OBJECT (h264parse,
+        "now %" GST_TIME_FORMAT ", last SPS/PPS %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (timestamp), GST_TIME_ARGS (h264parse->last_report));
 
-      GST_LOG_OBJECT (h264parse,
-          "now %" GST_TIME_FORMAT ", last SPS/PPS %" GST_TIME_FORMAT,
-          GST_TIME_ARGS (timestamp), GST_TIME_ARGS (h264parse->last_report));
+    GST_DEBUG_OBJECT (h264parse,
+        "interval since last SPS/PPS %" GST_TIME_FORMAT,
+        GST_TIME_ARGS (diff));
 
-      GST_DEBUG_OBJECT (h264parse,
-          "interval since last SPS/PPS %" GST_TIME_FORMAT,
-          GST_TIME_ARGS (diff));
+    if (GST_TIME_AS_SECONDS (diff) >= h264parse->interval ||
+        initial_frame || h264parse->push_codec) {
+      GstClockTime new_ts;
 
-      if (GST_TIME_AS_SECONDS (diff) >= h264parse->interval ||
-          initial_frame || h264parse->push_codec) {
-        GstClockTime new_ts;
+      /* avoid overwriting a perfectly fine timestamp */
+      new_ts = GST_CLOCK_TIME_IS_VALID (timestamp) ? timestamp :
+          h264parse->last_report;
 
-        /* avoid overwriting a perfectly fine timestamp */
-        new_ts = GST_CLOCK_TIME_IS_VALID (timestamp) ? timestamp :
-            h264parse->last_report;
-
-        if (gst_h264_sec_parse_handle_sps_pps_nals (h264parse, buffer, frame)) {
-          h264parse->last_report = new_ts;
-        }
+      if (gst_h264_sec_parse_handle_sps_pps_nals (h264parse, buffer, frame)) {
+        h264parse->last_report = new_ts;
       }
-      /* we pushed whatever we had */
-      h264parse->push_codec = FALSE;
-      h264parse->have_sps = FALSE;
-      h264parse->have_pps = FALSE;
-      h264parse->state &= GST_H264_SEC_PARSE_STATE_VALID_PICTURE_HEADERS;
     }
-  } else if (h264parse->interval == -1) {
-    if (h264parse->idr_pos >= 0) {
-      GST_LOG_OBJECT (h264parse, "IDR nal at offset %d", h264parse->idr_pos);
-
-      gst_h264_sec_parse_handle_sps_pps_nals (h264parse, buffer, frame);
-
-      /* we pushed whatever we had */
-      h264parse->push_codec = FALSE;
-      h264parse->have_sps = FALSE;
-      h264parse->have_pps = FALSE;
-      h264parse->state &= GST_H264_SEC_PARSE_STATE_VALID_PICTURE_HEADERS;
-    }
+    /* we pushed whatever we had */
+    h264parse->push_codec = FALSE;
+    h264parse->have_sps = FALSE;
+    h264parse->have_pps = FALSE;
+    h264parse->state &= GST_H264_SEC_PARSE_STATE_VALID_PICTURE_HEADERS;
   }
-
-  /* Fixme: setting passthrough mode casuing multiple issues:
-   * For nal aligned multiresoluton streams, passthrough mode make h264parse
-   * unable to advertise the new resoultions. Also causing issues while
-   * parsing MVC streams when it has two layers.
-   * Disabing passthourgh mode for now */
-#if 0
-  /* If SPS/PPS and a keyframe have been parsed, and we're not converting,
-   * we might switch to passthrough mode now on the basis that we've seen
-   * the SEI packets and know optional caps params (such as multiview).
-   * This is an efficiency optimisation that relies on stream properties
-   * remaining uniform in practice. */
-  if (h264parse->can_passthrough) {
-    if (h264parse->keyframe && h264parse->have_sps && h264parse->have_pps) {
-      GST_LOG_OBJECT (parse, "Switching to passthrough mode");
-      gst_base_parse_set_passthrough (parse, TRUE);
-    }
-  }
-#endif
 
   {
     guint i = 0;
@@ -3283,7 +3134,7 @@ gst_h264_sec_parse_get_property (GObject * object, guint prop_id,
 static gboolean
 plugin_init (GstPlugin * plugin)
 {
-  return gst_element_register (plugin, "h264secparse", GST_RANK_NONE,
+  return gst_element_register (plugin, "h264secparse", GST_RANK_PRIMARY,
           GST_TYPE_H264_SEC_PARSE);
 }
 

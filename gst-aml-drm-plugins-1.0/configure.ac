@@ -85,6 +85,7 @@ AC_SUBST(GST_PLUGIN_LDFLAGS)
 
 AC_CONFIG_FILES([Makefile
 src/Makefile
+src/dummy/Makefile
 src/secmem/Makefile
 src/secure_parse/Makefile
 ])

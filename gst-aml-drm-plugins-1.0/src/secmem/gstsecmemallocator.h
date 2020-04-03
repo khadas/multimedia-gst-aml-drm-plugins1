@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <gst/gst.h>
 #include <gst/allocators/allocators.h>
+#include <secmem_types.h>
 
 G_BEGIN_DECLS
 
@@ -49,9 +50,11 @@ struct _GstSecmemAllocatorClass
 GType           gst_secmem_allocator_get_type (void);
 GstAllocator *  gst_secmem_allocator_new (void);
 gboolean        gst_is_secmem_memory (GstMemory *mem);
-gboolean        gst_secmem_fill(GstMemory *mem, uint8_t *buffer, uint32_t offset, uint32_t length);
+gboolean        gst_secmem_fill(GstMemory *mem, uint32_t offset, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_store_csd(GstMemory *mem, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_prepend_csd(GstMemory *mem);
+gboolean        gst_secmem_parse_avcc(GstMemory *mem, uint8_t *buffer, uint32_t length);
+gboolean        gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag);
 secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem);
 secmem_paddr_t  gst_secmem_memory_get_paddr (GstMemory *mem);
 G_END_DECLS
