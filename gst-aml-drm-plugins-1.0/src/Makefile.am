@@ -1,1 +1,1 @@
-SUBDIRS = dummy secmem secure_parse
+SUBDIRS = secmem secure_parse dummy
