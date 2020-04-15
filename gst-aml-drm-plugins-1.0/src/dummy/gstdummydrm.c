@@ -148,7 +148,7 @@ gst_dummydrm_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
             }
             if (find) {
                 if (!plugin->allocator) {
-                    plugin->allocator = gst_secmem_allocator_new();
+                    plugin->allocator = gst_secmem_allocator_new(false, false);
                 }
                 if (plugin->outcaps) {
                     gst_caps_unref(plugin->outcaps);

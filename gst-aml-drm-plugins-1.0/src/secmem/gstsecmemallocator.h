@@ -40,6 +40,8 @@ struct _GstSecmemAllocator
 {
     GstDmaBufAllocator      parent;
     void                   *sess;
+    gboolean                is_4k;
+    gboolean                is_vp9;
 };
 
 struct _GstSecmemAllocatorClass
@@ -48,13 +50,14 @@ struct _GstSecmemAllocatorClass
 };
 
 GType           gst_secmem_allocator_get_type (void);
-GstAllocator *  gst_secmem_allocator_new (void);
+GstAllocator *  gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9);
 gboolean        gst_is_secmem_memory (GstMemory *mem);
 gboolean        gst_secmem_fill(GstMemory *mem, uint32_t offset, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_store_csd(GstMemory *mem, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_prepend_csd(GstMemory *mem);
 gboolean        gst_secmem_parse_avcc(GstMemory *mem, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag);
+gboolean        gst_secmem_parse_vp9(GstMemory *mem);
 secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem);
 secmem_paddr_t  gst_secmem_memory_get_paddr (GstMemory *mem);
 G_END_DECLS

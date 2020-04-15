@@ -52,7 +52,6 @@ static void
 gst_secmem_allocator_init (GstSecmemAllocator * self)
 {
     GstAllocator *allocator = GST_ALLOCATOR_CAST(self);
-    unsigned int ret;
 
     allocator->mem_type = GST_ALLOCATOR_SECMEM;
     allocator->mem_map = gst_secmem_mem_map;
@@ -61,12 +60,6 @@ gst_secmem_allocator_init (GstSecmemAllocator * self)
     allocator->mem_share = gst_secmem_mem_share;
 
     GST_OBJECT_FLAG_SET (self, GST_ALLOCATOR_FLAG_CUSTOM_ALLOC);
-
-    ret = Secure_V2_SessionCreate(&self->sess);
-    g_return_if_fail(ret == 0);
-    ret = Secure_V2_Init(self->sess, 1, 1, 0, 0);
-    g_return_if_fail(ret == 0);
-    GST_INFO("init success");
 }
 
 void gst_secmem_allocator_finalize(GObject *object)
@@ -166,12 +159,33 @@ gst_secmem_mem_share (GstMemory * gmem, gssize offset, gssize size)
 }
 
 GstAllocator *
-gst_secmem_allocator_new (void)
+gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9)
 {
+    unsigned int ret;
+    uint32_t flag;
     GstAllocator *alloc;
 
     alloc = g_object_new(GST_TYPE_SECMEM_ALLOCATOR, NULL);
     gst_object_ref_sink(alloc);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (alloc);
+    self->is_4k = is_4k;
+    self->is_vp9 = is_vp9;
+
+
+    ret = Secure_V2_SessionCreate(&self->sess);
+    g_return_val_if_fail(ret == 0, alloc);
+    if (is_4k) {
+        flag = 2;
+    } else {
+        flag = 1;
+    }
+    if (is_vp9) {
+        flag |= 0x09 << 4;
+    }
+    ret = Secure_V2_Init(self->sess, 1, flag, 0, 0);
+    g_return_val_if_fail(ret == 0, alloc);
+    GST_INFO("init success");
 
     return alloc;
 }
@@ -255,6 +269,23 @@ gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag)
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     ret = Secure_V2_Parse(self->sess, STREAM_TYPE_AVC2NALU, handle, NULL, 0, flag);
     g_return_val_if_fail(ret == 0, FALSE);
+    return TRUE;
+}
+
+gboolean
+gst_secmem_parse_vp9(GstMemory *mem)
+{
+    uint32_t ret;
+    uint32_t handle;
+    uint32_t header_size;
+
+    handle = gst_secmem_memory_get_handle(mem);
+    g_return_val_if_fail(handle != 0, FALSE);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_Parse(self->sess, STREAM_TYPE_VP9, handle, NULL, 0, &header_size);
+    g_return_val_if_fail(ret == 0, FALSE);
+    mem->size += header_size;
     return TRUE;
 }
 

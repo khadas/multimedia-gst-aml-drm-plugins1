@@ -1080,7 +1080,6 @@ gst_h264_sec_parse_handle_frame_packetized (GstBaseParse * parse,
   const guint nl = h264parse->nal_length_size;
   gint left = 0;
   gsize size = gst_buffer_get_size(buffer);
-  uint32_t flag;
 
   if (nl < 1 || nl > 4) {
     GST_DEBUG_OBJECT (h264parse, "insufficient data to split input");
@@ -2518,6 +2517,8 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
     gst_buffer_unmap(h264parse->codec_data_in, &map);
     if (!rc)
       GST_ERROR_OBJECT(parse, "gst_secmem_parse_avcc fail");
+    else
+      gst_buffer_replace(&h264parse->codec_data_in, NULL);
   }
 
   /* convert avc format to stream format. */
@@ -2526,15 +2527,16 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
     GST_ERROR_OBJECT(parse, "gst_secmem_parse_avc2nalu fail");
     return GST_FLOW_ERROR;
   } else
-    GST_LOG_OBJECT(parse, "gst_secmem_parse_avc2nalu success, %x", flag);
+    GST_LOG_OBJECT(parse, "gst_secmem_parse_avc2nalu success, %x buffer:%p", flag, buffer);
 
   if ((flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN))
-          && (flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN)) == 0) {
+          && !(flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
+    GST_WARNING_OBJECT(h264parse, "frame dropped push_codec:%d", h264parse->push_codec);
     return GST_BASE_PARSE_FLOW_DROPPED;
   }
 
-  if (h264parse->codec_data_in) {
-    if ((flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN)) == 0
+  if (h264parse->push_codec) {
+    if (!(flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN))
               && (flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
       GST_DEBUG_OBJECT(h264parse, "prepend csd");
       ret = gst_secmem_prepend_csd(mem);
@@ -2542,8 +2544,11 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
         GST_ERROR_OBJECT(h264parse, "gst_secmem_prepend_csd failed");
         return FALSE;
       }
+      h264parse->push_codec = FALSE;
+    } else if (!(flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
+      GST_WARNING_OBJECT(h264parse, "frame dropped buffer:%p", buffer);
+      return GST_BASE_PARSE_FLOW_DROPPED;
     }
-    gst_buffer_replace(&h264parse->codec_data_in, NULL);
   }
 
 #if 0
@@ -2563,9 +2568,8 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
     gst_h264_sec_parse_prepare_key_unit (h264parse, event);
   }
 
-  //TODO(song):disable peroidic feature, but leave push_codec.
   /* periodic SPS/PPS sending */
-  if (h264parse->push_codec) {
+  if (0) {
     GstClockTime timestamp = GST_BUFFER_TIMESTAMP (buffer);
     guint64 diff;
     gboolean initial_frame = FALSE;
@@ -2997,6 +3001,14 @@ gst_h264_sec_parse_event (GstBaseParse * parse, GstEvent * event)
   GstH264SecParse *h264parse = GST_H264_SEC_PARSE (parse);
 
   switch (GST_EVENT_TYPE (event)) {
+    case GST_EVENT_CAPS:
+    {
+      GstCaps *caps;
+      gst_event_parse_caps (event, &caps);
+      GST_DEBUG_OBJECT (h264parse, "caps: %" GST_PTR_FORMAT, caps);
+      res = GST_BASE_PARSE_CLASS (parent_class)->sink_event (parse, event);
+      break;
+    }
     case GST_EVENT_CUSTOM_DOWNSTREAM:
     {
       GstClockTime timestamp, stream_time, running_time;
@@ -3130,29 +3142,3 @@ gst_h264_sec_parse_get_property (GObject * object, guint prop_id,
       break;
   }
 }
-
-static gboolean
-plugin_init (GstPlugin * plugin)
-{
-  return gst_element_register (plugin, "h264secparse", GST_RANK_PRIMARY,
-          GST_TYPE_H264_SEC_PARSE);
-}
-
-#ifndef VERSION
-#define VERSION "0.0.1"
-#endif
-#ifndef PACKAGE
-#define PACKAGE "aml_package"
-#endif
-#ifndef PACKAGE_NAME
-#define PACKAGE_NAME "aml_media"
-#endif
-#ifndef GST_PACKAGE_ORIGIN
-#define GST_PACKAGE_ORIGIN "http://amlogic.com"
-#endif
-
-GST_PLUGIN_DEFINE (GST_VERSION_MAJOR,
-  GST_VERSION_MINOR,
-  h264secparse,
-  "Amlogic plugin for secure h264 parser",
-  plugin_init, VERSION, "LGPL", PACKAGE_NAME, GST_PACKAGE_ORIGIN)
