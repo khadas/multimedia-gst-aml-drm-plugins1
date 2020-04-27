@@ -42,6 +42,9 @@ struct _GstSecmemAllocator
     void                   *sess;
     gboolean                is_4k;
     gboolean                is_vp9;
+    gsize                   counter;
+    GCond                   cond;
+    GMutex                  mutex;
 };
 
 struct _GstSecmemAllocatorClass

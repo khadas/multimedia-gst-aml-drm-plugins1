@@ -52,7 +52,9 @@ static void
 gst_secmem_allocator_init (GstSecmemAllocator * self)
 {
     GstAllocator *allocator = GST_ALLOCATOR_CAST(self);
-
+    g_mutex_init (&self->mutex);
+    g_cond_init (&self->cond);
+    self->counter = 0;
     allocator->mem_type = GST_ALLOCATOR_SECMEM;
     allocator->mem_map = gst_secmem_mem_map;
     allocator->mem_unmap = gst_secmem_mem_unmap;
@@ -68,6 +70,8 @@ void gst_secmem_allocator_finalize(GObject *object)
     if (self->sess) {
         Secure_V2_SessionDestroy(&self->sess);
     }
+    g_mutex_clear (&self->mutex);
+    g_cond_clear (&self->cond);
 }
 
 GstMemory *
@@ -84,6 +88,10 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     g_return_val_if_fail (GST_IS_SECMEM_ALLOCATOR (allocator), NULL);
     g_return_val_if_fail(self->sess != NULL, NULL);
 
+    g_mutex_lock (&self->mutex);
+    if (self->counter >= 31) {
+        g_cond_wait (&self->cond, &self->mutex);
+    }
     ret = Secure_V2_MemCreate(self->sess, &handle);
     if (ret) {
         GST_ERROR("MemCreate failed");
@@ -108,6 +116,8 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     }
     mem->size = size;
     GST_INFO("alloc dma %d", fd);
+    self->counter++;
+    g_mutex_unlock (&self->mutex);
     return mem;
 
 error_export:
@@ -115,6 +125,7 @@ error_export:
 error_alloc:
     Secure_V2_MemRelease(self->sess, handle);
 error_create:
+    g_mutex_unlock (&self->mutex);
     return NULL;
 }
 
@@ -122,12 +133,16 @@ void
 gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
 {
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (allocator);
+    g_mutex_lock (&self->mutex);
     int fd = gst_fd_memory_get_fd(memory);
     secmem_handle_t handle = Secure_V2_FdToHandle(self->sess, fd);
     GST_INFO("free dma %d", gst_fd_memory_get_fd(memory));
     GST_ALLOCATOR_CLASS (parent_class)->free(allocator, memory);
     Secure_V2_MemFree(self->sess, handle);
     Secure_V2_MemRelease(self->sess, handle);
+    self->counter--;
+    g_cond_broadcast (&self->cond);
+    g_mutex_unlock (&self->mutex);
 }
 
 
@@ -165,6 +180,7 @@ gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9)
     uint32_t flag;
     GstAllocator *alloc;
 
+    is_4k = TRUE; //Force 4K
     alloc = g_object_new(GST_TYPE_SECMEM_ALLOCATOR, NULL);
     gst_object_ref_sink(alloc);
 
@@ -175,11 +191,7 @@ gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9)
 
     ret = Secure_V2_SessionCreate(&self->sess);
     g_return_val_if_fail(ret == 0, alloc);
-    if (is_4k) {
-        flag = 2;
-    } else {
-        flag = 1;
-    }
+    flag = is_4k ? 2 : 1;
     if (is_vp9) {
         flag |= 0x09 << 4;
     }
