@@ -79,14 +79,15 @@ enum
 static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-h264(memory:SecMem)"));
+    GST_STATIC_CAPS ("video/x-h264(" GST_CAPS_FEATURE_MEMORY_SECMEM_MEMORY ")"));
 
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-h264, parsed = (boolean) true, "
-        "stream-format=(string) { avc, avc3, byte-stream }, "
-        "alignment=(string) { au, nal }"));
+    GST_STATIC_CAPS ("video/x-h264(" GST_CAPS_FEATURE_MEMORY_DMABUF "),"
+        "parsed = (boolean) true, "
+        "stream-format=(string)byte-stream, "
+        "alignment=(string)au"));
 
 #define parent_class gst_h264_sec_parse_parent_class
 G_DEFINE_TYPE (GstH264SecParse, gst_h264_sec_parse, GST_TYPE_BASE_PARSE);
@@ -1847,6 +1848,8 @@ gst_h264_sec_parse_update_src_caps (GstH264SecParse * h264parse, GstCaps * caps)
   caps = NULL;
   if (G_UNLIKELY (!sps)) {
     caps = gst_caps_copy (sink_caps);
+    gst_caps_set_simple (caps, "width", G_TYPE_INT, 1920,
+              "height", G_TYPE_INT, 1080, NULL);
   } else {
     gint crop_width, crop_height;
     gint fps_num, fps_den;
@@ -2013,7 +2016,7 @@ gst_h264_sec_parse_update_src_caps (GstH264SecParse * h264parse, GstCaps * caps)
   if (caps) {
     guint size = gst_caps_get_size(caps);
     for (unsigned i = 0; i < size; ++i) {
-      gst_caps_set_features(caps, i, NULL);
+      gst_caps_set_features(caps, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
     }
 
     gst_caps_set_simple (caps, "parsed", G_TYPE_BOOLEAN, TRUE,

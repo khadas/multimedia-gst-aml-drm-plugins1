@@ -169,7 +169,7 @@ gst_dummydrm_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
             ret = gst_caps_copy(caps);
             unsigned size = gst_caps_get_size(ret);
             for (unsigned i = 0; i < size; ++i) {
-                gst_caps_set_features(ret, i, NULL);
+                gst_caps_set_features(ret, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
             }
         }  else {
             ret = gst_caps_copy(srccaps);

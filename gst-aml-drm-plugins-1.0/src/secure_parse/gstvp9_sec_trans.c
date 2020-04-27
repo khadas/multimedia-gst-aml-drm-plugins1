@@ -10,12 +10,12 @@ GST_DEBUG_CATEGORY_STATIC (gst_vp9_sec_trans_debug);
 static GstStaticPadTemplate sinktemplate = GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-vp9(memory:SecMem)"));
+    GST_STATIC_CAPS ("video/x-vp9(" GST_CAPS_FEATURE_MEMORY_SECMEM_MEMORY ")"));
 
 static GstStaticPadTemplate srctemplate = GST_STATIC_PAD_TEMPLATE ("src",
     GST_PAD_SRC,
     GST_PAD_ALWAYS,
-    GST_STATIC_CAPS ("video/x-vp9"));
+    GST_STATIC_CAPS ("video/x-vp9(" GST_CAPS_FEATURE_MEMORY_DMABUF ")"));
 
 #define gst_vp9_sec_trans_parent_class parent_class
 G_DEFINE_TYPE(GstVp9SecTrans, gst_vp9_sec_trans, GST_TYPE_BASE_TRANSFORM);
@@ -117,12 +117,18 @@ gst_vp9_sec_trans_transform_caps(GstBaseTransform *trans, GstPadDirection direct
             ret = gst_caps_copy(srccaps);
             s = gst_caps_get_structure (caps, 0);
 
-            if (s && gst_structure_has_field (s, "width")) {
-                gst_structure_get_int (s, "width", &width);
+            if (s) {
+                width = 1920;
+                if (gst_structure_has_field (s, "width")) {
+                    gst_structure_get_int (s, "width", &width);
+                }
                 gst_caps_set_simple (ret, "width", G_TYPE_INT, width, NULL);
             }
-            if (s && gst_structure_has_field (s, "height")) {
-                gst_structure_get_int (s, "height", &height);
+            if (s) {
+                height = 1080;
+                if (gst_structure_has_field (s, "height")) {
+                    gst_structure_get_int (s, "height", &height);
+                }
                 gst_caps_set_simple (ret, "height", G_TYPE_INT, height, NULL);
             }
         }
@@ -134,7 +140,7 @@ gst_vp9_sec_trans_transform_caps(GstBaseTransform *trans, GstPadDirection direct
             ret = gst_caps_copy(caps);
             unsigned size = gst_caps_get_size(ret);
             for (unsigned i = 0; i < size; ++i) {
-                gst_caps_set_features(ret, i, NULL);
+                gst_caps_set_features(ret, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
             }
         }  else {
             ret = gst_caps_copy(srccaps);
