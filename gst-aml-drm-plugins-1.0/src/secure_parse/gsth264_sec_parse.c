@@ -2461,6 +2461,23 @@ gst_h264_sec_parse_handle_sps_pps_nals (GstH264SecParse * h264parse,
   return send_done;
 }
 
+//#define DUMP_ES
+#ifdef DUMP_ES
+static void dump(GstMemory* mem, gint size, const char* name)
+{
+  uint8_t *data = (uint8_t *)malloc(size);
+  if (data) {
+    gst_secmem_dump(mem, data, size);
+    FILE* fd = fopen(name, "a+b");
+    if (fd) {
+      fwrite(data, 1, size, fd);
+      fclose(fd);
+    }
+    free(data);
+  }
+}
+#endif
+
 static GstFlowReturn
 gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
 {
@@ -2528,6 +2545,9 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
   rc = gst_secmem_parse_avc2nalu(mem, &flag);
   if (!rc) {
     GST_ERROR_OBJECT(parse, "gst_secmem_parse_avc2nalu fail");
+#ifdef DUMP_ES
+    dump(mem, gst_buffer_get_size(buffer), "/tmp/wrong.dat");
+#endif
     return GST_FLOW_ERROR;
   } else
     GST_LOG_OBJECT(parse, "gst_secmem_parse_avc2nalu success, %x buffer:%p", flag, buffer);
@@ -2540,7 +2560,7 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
 
   if (h264parse->push_codec) {
     if (!(flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN))
-              && (flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
+              && (flag & PARSER_H264_IDR_SEEN)) {
       GST_DEBUG_OBJECT(h264parse, "prepend csd");
       ret = gst_secmem_prepend_csd(mem);
       if (!ret) {
@@ -2548,9 +2568,12 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
         return FALSE;
       }
       h264parse->push_codec = FALSE;
-    } else if (!(flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
+    } else if (!(flag & PARSER_H264_IDR_SEEN)) {
       GST_WARNING_OBJECT(h264parse, "frame dropped buffer:%p", buffer);
       return GST_BASE_PARSE_FLOW_DROPPED;
+    } else if (flag & PARSER_H264_IDR_SEEN) {
+      GST_DEBUG_OBJECT(h264parse, "SPS/PPS in stream");
+      h264parse->push_codec = FALSE;
     }
   }
 

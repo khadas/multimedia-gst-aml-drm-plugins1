@@ -17,7 +17,7 @@ plugin_LTLIBRARIES = libgstamlsecparse.la
 libgstamlsecparse_la_SOURCES = gst_aml_sec_parse.c gsth264_sec_parse.c gstvp9_sec_trans.c
 
 # compiler and linker flags used to compile this plugin, set in configure.ac
-libgstamlsecparse_la_CFLAGS = $(GST_CFLAGS) -I$(top_srcdir)/include -I$(top_srcdir)/src/secmem
+libgstamlsecparse_la_CFLAGS = $(GST_CFLAGS) -I$(top_srcdir)/include -I$(top_srcdir)/src/secmem -DGST_USE_UNSTABLE_API
 libgstamlsecparse_la_LIBADD = $(GST_LIBS) $(top_builddir)/src/secmem/libgstsecmemallocator.la -L$(TARGET_DIR)/usr/lib/gstreamer-1.0 -lgstvideoparsersbad
 libgstamlsecparse_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 libgstamlsecparse_la_LIBTOOLFLAGS = --tag=disable-static
