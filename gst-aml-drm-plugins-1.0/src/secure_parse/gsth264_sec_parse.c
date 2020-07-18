@@ -2454,11 +2454,7 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
     return GST_FLOW_ERROR;
   }
 
-#ifdef DUMP_ES
-  dump(mem, gst_buffer_get_size(buffer), "/tmp/es.dat");
-#endif
-
-  if (h264parse->format != GST_H264_SEC_PARSE_FORMAT_BYTE) {
+  if (h264parse->format_org != GST_H264_SEC_PARSE_FORMAT_BYTE) {
     gboolean rc = FALSE;
     uint32_t flag;
 
@@ -2510,6 +2506,17 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
         h264parse->push_codec = FALSE;
       }
     }
+
+#ifdef DUMP_ES
+    dump(mem, gst_buffer_get_size(buffer), "/tmp/es.dat");
+#endif
+
+  } else {
+    GST_LOG_OBJECT(h264parse, "bypass frame format: %d", h264parse->format_org);
+#ifdef DUMP_ES
+    dump(mem, gst_buffer_get_size(buffer), "/tmp/es.dat");
+#endif
+
   }
 
   if ((event = check_pending_key_unit_event (h264parse->force_key_unit_event,
@@ -2625,6 +2632,9 @@ gst_h264_sec_parse_set_caps (GstBaseParse * parse, GstCaps * caps)
   gst_h264_sec_parse_format_from_caps (caps, &format, &align);
 
   codec_data_value = gst_structure_get_value (str, "codec_data");
+
+  h264parse->format_org = format;
+  GST_INFO_OBJECT(h264parse, "original format is: %d", format);
 
   /* fix up caps without stream-format for max. backwards compatibility */
   if (format == GST_H264_SEC_PARSE_FORMAT_NONE) {

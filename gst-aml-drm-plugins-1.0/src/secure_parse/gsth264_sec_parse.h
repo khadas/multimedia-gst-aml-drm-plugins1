@@ -73,6 +73,7 @@ struct _GstH264SecParse
   guint in_align;
   guint align;
   guint format;
+  guint format_org;
   gint current_off;
   /* True if input format and alignment match negotiated output */
   gboolean can_passthrough;
