@@ -89,7 +89,7 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     g_return_val_if_fail(self->sess != NULL, NULL);
 
     g_mutex_lock (&self->mutex);
-    if (self->counter >= 31) {
+    if (self->counter >= 63) {
         g_cond_wait (&self->cond, &self->mutex);
     }
     ret = Secure_V2_MemCreate(self->sess, &handle);
