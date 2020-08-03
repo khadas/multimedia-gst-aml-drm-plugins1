@@ -12,6 +12,8 @@
 #include "gstsecmemallocator.h"
 #include "secmem_ca.h"
 
+#define MAX_BUFS_COUNT    (511)
+
 GST_DEBUG_CATEGORY_STATIC (gst_secmem_allocator_debug);
 #define GST_CAT_DEFAULT gst_secmem_allocator_debug
 
@@ -89,7 +91,7 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     g_return_val_if_fail(self->sess != NULL, NULL);
 
     g_mutex_lock (&self->mutex);
-    if (self->counter >= 63) {
+    if (self->counter >= MAX_BUFS_COUNT) {
         g_cond_wait (&self->cond, &self->mutex);
     }
     ret = Secure_V2_MemCreate(self->sess, &handle);
