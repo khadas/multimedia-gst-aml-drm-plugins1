@@ -324,3 +324,17 @@ secmem_paddr_t gst_secmem_memory_get_paddr (GstMemory *mem)
     secmem_paddr_t paddr = Secure_V2_FdToPaddr(self->sess, fd);
     return paddr;
 }
+
+gint gst_secmem_get_free_buf_num(GstMemory *mem)
+{
+    gint cnt;
+    g_return_val_if_fail(mem != NULL, -1);
+    g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), -1);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    g_mutex_lock (&self->mutex);
+    cnt = MAX_BUFS_COUNT - self->counter;
+    g_mutex_unlock (&self->mutex);
+    return cnt;
+
+}

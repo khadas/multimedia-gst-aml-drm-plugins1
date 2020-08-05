@@ -61,6 +61,7 @@ gboolean        gst_secmem_prepend_csd(GstMemory *mem);
 gboolean        gst_secmem_parse_avcc(GstMemory *mem, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag);
 gboolean        gst_secmem_parse_vp9(GstMemory *mem);
+gint            gst_secmem_get_free_buf_num(GstMemory *mem);
 secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem);
 secmem_paddr_t  gst_secmem_memory_get_paddr (GstMemory *mem);
 G_END_DECLS
