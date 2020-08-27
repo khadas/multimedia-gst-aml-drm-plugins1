@@ -43,6 +43,7 @@ struct _GstSecmemAllocator
     gboolean                is_4k;
     gboolean                is_vp9;
     gsize                   counter;
+    gsize                   total_used;
     GCond                   cond;
     GMutex                  mutex;
 };
@@ -62,6 +63,7 @@ gboolean        gst_secmem_parse_avcc(GstMemory *mem, uint8_t *buffer, uint32_t 
 gboolean        gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag);
 gboolean        gst_secmem_parse_vp9(GstMemory *mem);
 gint            gst_secmem_get_free_buf_num(GstMemory *mem);
+gint            gst_secmem_get_free_buf_size(GstMemory *mem);
 secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem);
 secmem_paddr_t  gst_secmem_memory_get_paddr (GstMemory *mem);
 G_END_DECLS
