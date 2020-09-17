@@ -211,8 +211,7 @@ gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9)
 gboolean
 gst_is_secmem_memory (GstMemory *mem)
 {
-    g_return_val_if_fail(mem != NULL, FALSE);
-    return GST_IS_SECMEM_ALLOCATOR(mem->allocator);
+    return gst_memory_is_type(mem, GST_ALLOCATOR_SECMEM);
 }
 
 gboolean

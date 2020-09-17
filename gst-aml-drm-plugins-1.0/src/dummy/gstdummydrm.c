@@ -204,6 +204,7 @@ gst_dummydrm_prepare_output_buffer(GstBaseTransform * trans, GstBuffer *inbuf, G
     *outbuf = gst_buffer_new_allocate(plugin->allocator, gst_buffer_get_size(inbuf), NULL);
 
     g_return_val_if_fail(*outbuf != NULL, GST_FLOW_ERROR);
+    GST_BASE_TRANSFORM_CLASS(parent_class)->copy_metadata (trans, inbuf, *outbuf);
     return ret;
 }
 
