@@ -22,4 +22,5 @@ libgstsecmemallocator_la_LIBADD = $(GST_LIBS) -lsecmem
 libgstsecmemallocator_la_LDFLAGS = $(GST_LDFLAGS)
 libgstsecmemallocator_la_LIBTOOLFLAGS = --tag=disable-static
 
-include_HEADERS = gstsecmemallocator.h 
+libgstsecmemallocator_includedir = $(includedir)/gstreamer-1.0/gst/allocators
+libgstsecmemallocator_include_HEADERS = gstsecmemallocator.h

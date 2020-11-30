@@ -66,6 +66,10 @@ gint            gst_secmem_get_free_buf_num(GstMemory *mem);
 gint            gst_secmem_get_free_buf_size(GstMemory *mem);
 secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem);
 secmem_paddr_t  gst_secmem_memory_get_paddr (GstMemory *mem);
+//gint            gst_secmem_allocator_get_available(GstAllocator *allocator);
+secmem_handle_t gst_buffer_get_secmem_handle(GstBuffer *buffer);
+secmem_paddr_t  gst_buffer_get_secmem_paddr(GstBuffer *buffer);
+
 G_END_DECLS
 
 #endif /* __GST_SECMEMALLOCATOR_H__ */

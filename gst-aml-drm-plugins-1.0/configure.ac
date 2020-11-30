@@ -28,6 +28,10 @@ AC_CHECK_PROG(HAVE_PKGCONFIG, pkg-config, [ ], [
   AC_MSG_ERROR([You need to have pkg-config installed!])
 ])
 
+GST_API_VERSION=1.0
+AC_SUBST(GST_API_VERSION)
+AC_DEFINE_UNQUOTED(GST_API_VERSION, "$GST_API_VERSION", [GStreamer API Version])
+
 dnl Check for the required version of GStreamer core (and gst-plugins-base)
 dnl This will export GST_CFLAGS and GST_LIBS variables for use in Makefile.am
 dnl
@@ -86,6 +90,7 @@ AC_SUBST(GST_PLUGIN_LDFLAGS)
 AC_CONFIG_FILES([Makefile
 src/Makefile
 src/secmem/Makefile
+src/secmem/gstsecmemallocator.pc
 src/secure_parse/Makefile
 src/dummy/Makefile
 ])

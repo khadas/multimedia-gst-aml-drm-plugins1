@@ -69,6 +69,7 @@ void gst_secmem_allocator_finalize(GObject *object)
     }
     g_mutex_clear (&self->mutex);
     g_cond_clear (&self->cond);
+    G_OBJECT_CLASS(parent_class)->finalize(object);
 }
 
 GstMemory *
@@ -352,4 +353,25 @@ gint gst_secmem_get_free_buf_size(GstMemory *mem)
     sz = MAX_SEC_MEMSZ - self->total_used;
     g_mutex_unlock (&self->mutex);
     return sz;
+}
+//gint gst_secmem_allocator_get_available(GstAllocator *allocator)
+//{
+//
+//}
+secmem_handle_t gst_buffer_get_secmem_handle(GstBuffer *buffer)
+{
+    GstMemory *mem = gst_buffer_peek_memory(buffer, 0);
+    g_return_val_if_fail(gst_is_secmem_memory(mem), 0);
+
+    secmem_handle_t handle = gst_secmem_memory_get_handle(mem);
+    return handle;
+}
+
+secmem_paddr_t gst_buffer_get_secmem_paddr(GstBuffer *buffer)
+{
+    GstMemory *mem = gst_buffer_peek_memory(buffer, 0);
+    g_return_val_if_fail(gst_is_secmem_memory(mem), 0);
+
+    secmem_handle_t handle = gst_secmem_memory_get_paddr(mem);
+    return handle;
 }
