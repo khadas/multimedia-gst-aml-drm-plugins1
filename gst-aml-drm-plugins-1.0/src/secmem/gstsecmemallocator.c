@@ -375,3 +375,18 @@ secmem_paddr_t gst_buffer_get_secmem_paddr(GstBuffer *buffer)
     secmem_handle_t handle = gst_secmem_memory_get_paddr(mem);
     return handle;
 }
+
+gboolean gst_buffer_copy_to_secmem(GstBuffer *dst, GstBuffer *src)
+{
+    gboolean ret;
+    GstMapInfo map;
+    GstMemory *mem;
+
+    g_return_val_if_fail(dst != NULL, FALSE);
+    mem = gst_buffer_peek_memory(dst, 0);
+    g_return_val_if_fail(gst_is_secmem_memory(mem), FALSE);
+    g_return_val_if_fail(gst_buffer_map(src, &map, GST_MAP_READ), FALSE);
+    ret = gst_secmem_fill(mem, 0, map.data, map.size);
+    gst_buffer_unmap(src, &map);
+    return ret;
+}
