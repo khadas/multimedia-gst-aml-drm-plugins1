@@ -1,10 +1,5 @@
-/* GStreamer H.264 Parser
- * Copyright (C) <2010> Collabora ltd
- * Copyright (C) <2010> Nokia Corporation
- * Copyright (C) <2011> Intel Corporation
- *
- * Copyright (C) <2010> Mark Nauwelaerts <mark.nauwelaerts@collabora.co.uk>
- * Copyright (C) <2011> Thibault Saunier <thibault.saunier@collabora.com>
+/* GStreamer H.264 Secure Parser
+ * Copyright (C) <2019> Amlogic Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -140,14 +135,6 @@ struct _GstH264SecParse
   /* For insertion of AU Delimiter */
   gboolean aud_needed;
   gboolean aud_insert;
-
-#if 0
-  /* pending closed captions */
-  guint8 closedcaptions[96];
-  guint closedcaptions_size;
-  GstVideoCaptionType closedcaptions_type;
-#endif
-
 };
 
 struct _GstH264SecParseClass

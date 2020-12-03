@@ -1,10 +1,6 @@
-/* GStreamer H.264 Parser
- * Copyright (C) <2010> Collabora ltd
- * Copyright (C) <2010> Nokia Corporation
- * Copyright (C) <2011> Intel Corporation
+/* GStreamer H.264 Secure Parser
  *
- * Copyright (C) <2010> Mark Nauwelaerts <mark.nauwelaerts@collabora.co.uk>
- * Copyright (C) <2011> Thibault Saunier <thibault.saunier@collabora.com>
+ * Copyright (C) <2019> Amlogic Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -521,97 +517,6 @@ _nal_name (GstH264NalUnitType nal_type)
 }
 #endif
 
-#if 0
-static void
-gst_h264_sec_parse_process_sei_user_data (GstH264SecParse * h264parse,
-    GstH264RegisteredUserData * rud)
-{
-  guint16 provider_code;
-  guint32 atsc_user_id;
-  GstByteReader br;
-
-  if (rud->country_code != 0xB5)
-    return;
-
-  if (rud->data == NULL || rud->size < 2)
-    return;
-
-  gst_byte_reader_init (&br, rud->data, rud->size);
-
-  provider_code = gst_byte_reader_get_uint16_be_unchecked (&br);
-
-  /* There is also 0x29 / 47 for DirecTV, but we don't handle that for now.
-   * https://en.wikipedia.org/wiki/CEA-708#Picture_User_Data */
-  if (provider_code != 0x0031)
-    return;
-
-  /* ANSI/SCTE 128-2010a section 8.1.2 */
-  if (!gst_byte_reader_get_uint32_be (&br, &atsc_user_id))
-    return;
-
-  atsc_user_id = GUINT32_FROM_BE (atsc_user_id);
-  switch (atsc_user_id) {
-    case GST_MAKE_FOURCC ('G', 'A', '9', '4'):{
-      guint8 user_data_type_code, m;
-
-      /* 8.2.1 ATSC1_data() Semantics, Table 15 */
-      if (!gst_byte_reader_get_uint8 (&br, &user_data_type_code))
-        return;
-
-      switch (user_data_type_code) {
-        case 0x03:{
-          guint8 process_cc_data_flag;
-          guint8 cc_count, em_data, b;
-          guint i;
-
-          if (!gst_byte_reader_get_uint8 (&br, &b) || (b & 0x20) != 0)
-            break;
-
-          if (!gst_byte_reader_get_uint8 (&br, &em_data) || em_data != 0xff)
-            break;
-
-          process_cc_data_flag = (b & 0x40) != 0;
-          cc_count = b & 0x1f;
-
-          if (cc_count * 3 > gst_byte_reader_get_remaining (&br))
-            break;
-
-          if (!process_cc_data_flag || cc_count == 0) {
-            gst_byte_reader_skip_unchecked (&br, cc_count * 3);
-            break;
-          }
-
-          /* Shouldn't really happen so let's not go out of our way to handle it */
-          if (h264parse->closedcaptions_size > 0) {
-            GST_WARNING_OBJECT (h264parse, "unused pending closed captions!");
-            GST_MEMDUMP_OBJECT (h264parse, "unused captions being dropped",
-                h264parse->closedcaptions, h264parse->closedcaptions_size);
-          }
-
-          for (i = 0; i < cc_count * 3; i++) {
-            h264parse->closedcaptions[i] =
-                gst_byte_reader_get_uint8_unchecked (&br);
-          }
-          h264parse->closedcaptions_size = cc_count * 3;
-          h264parse->closedcaptions_type = GST_VIDEO_CAPTION_TYPE_CEA708_RAW;
-
-          GST_LOG_OBJECT (h264parse, "Extracted closed captions");
-          break;
-        }
-        default:
-          GST_LOG ("Unhandled atsc1 user data type %d", atsc_user_id);
-          break;
-      }
-      if (!gst_byte_reader_get_uint8 (&br, &m) || m != 0xff)
-        GST_WARNING_OBJECT (h264parse, "Marker bits mismatch after ATSC1_data");
-      break;
-    }
-    default:
-      break;
-  }
-}
-#endif
-
 static void
 gst_h264_sec_parse_process_sei (GstH264SecParse * h264parse, GstH264NalUnit * nalu)
 {
@@ -656,12 +561,6 @@ gst_h264_sec_parse_process_sei (GstH264SecParse * h264parse, GstH264NalUnit * na
         GST_LOG_OBJECT (h264parse, "pic timing updated");
         break;
       }
-#if 0
-      case GST_H264_SEI_REGISTERED_USER_DATA:
-        gst_h264_sec_parse_process_sei_user_data (h264parse,
-            &sei.payload.registered_user_data);
-        break;
-#endif
       case GST_H264_SEI_BUF_PERIOD:
         if (h264parse->ts_trn_nb == GST_CLOCK_TIME_NONE ||
             h264parse->dts == GST_CLOCK_TIME_NONE)
@@ -1113,18 +1012,7 @@ gst_h264_sec_parse_handle_frame (GstBaseParse * parse,
 {
   GstH264SecParse *h264parse = GST_H264_SEC_PARSE (parse);
   GstBuffer *buffer = frame->buffer;
-  //GstMapInfo map;
-  //guint8 *data;
   gsize size;
-  //gint current_off = 0;
-  //gboolean drain;
-  //gboolean nonext;
-  //GstH264NalParser *nalparser = h264parse->nalparser;
-  //GstH264NalUnit nalu;
-  //GstH264ParserResult pres;
-  //gint framesize;
-  //GstFlowReturn ret;
-  //gboolean au_complete;
 
   if (G_UNLIKELY (GST_BUFFER_FLAG_IS_SET (frame->buffer,
               GST_BUFFER_FLAG_DISCONT))) {
@@ -1155,220 +1043,10 @@ gst_h264_sec_parse_handle_frame (GstBaseParse * parse,
     GST_LOG_OBJECT (h264parse, "resuming frame parsing");
   }
 
-#if 0
-  gst_buffer_map (buffer, &map, GST_MAP_READ);
-  data = map.data;
-
-  /* Always consume the entire input buffer when in_align == ALIGN_AU */
-  drain = GST_BASE_PARSE_DRAINING (parse)
-      || h264parse->in_align == GST_H264_SEC_PARSE_ALIGN_AU;
-  nonext = FALSE;
-
-  current_off = h264parse->current_off;
-  if (current_off < 0)
-    current_off = 0;
-  g_assert (current_off < size);
-  GST_DEBUG_OBJECT (h264parse, "last parse position %d", current_off);
-
-  /* check for initial skip */
-  if (h264parse->current_off == -1) {
-    pres =
-        gst_h264_parser_identify_nalu_unchecked (nalparser, data, current_off,
-        size, &nalu);
-    switch (pres) {
-      case GST_H264_PARSER_OK:
-        if (nalu.sc_offset > 0) {
-          int i;
-          gboolean is_filler_data = TRUE;
-          /* Handle filler data */
-          for (i = 0; i < nalu.sc_offset; i++) {
-            if (data[i] != 0x00) {
-              is_filler_data = FALSE;
-              break;
-            }
-          }
-          if (is_filler_data) {
-            GST_DEBUG_OBJECT (parse, "Dropping filler data %d", nalu.sc_offset);
-            frame->flags |= GST_BASE_PARSE_FRAME_FLAG_DROP;
-            gst_buffer_unmap (buffer, &map);
-            ret = gst_base_parse_finish_frame (parse, frame, nalu.sc_offset);
-            goto drop;
-          }
-          *skipsize = nalu.sc_offset;
-          goto skip;
-        }
-        break;
-      case GST_H264_PARSER_NO_NAL:
-        *skipsize = size - 3;
-        goto skip;
-        break;
-      default:
-        /* should not really occur either */
-        GST_ELEMENT_ERROR (h264parse, STREAM, FORMAT,
-            ("Error parsing H.264 stream"), ("Invalid H.264 stream"));
-        goto invalid_stream;
-    }
-  }
-
-  while (TRUE) {
-    pres =
-        gst_h264_sec_parser_identify_nalu (nalparser, data, current_off, size,
-        &nalu);
-
-    switch (pres) {
-      case GST_H264_PARSER_OK:
-        GST_DEBUG_OBJECT (h264parse, "complete nal (offset, size): (%u, %u) ",
-            nalu.offset, nalu.size);
-        break;
-      case GST_H264_PARSER_NO_NAL_END:
-        GST_DEBUG_OBJECT (h264parse, "not a complete nal found at offset %u",
-            nalu.offset);
-        /* if draining, accept it as complete nal */
-        if (drain) {
-          nonext = TRUE;
-          nalu.size = size - nalu.offset;
-          GST_DEBUG_OBJECT (h264parse, "draining, accepting with size %u",
-              nalu.size);
-          /* if it's not too short at least */
-          if (nalu.size < 2)
-            goto broken;
-          break;
-        }
-        /* otherwise need more */
-        goto more;
-      case GST_H264_PARSER_BROKEN_LINK:
-        GST_ELEMENT_ERROR (h264parse, STREAM, FORMAT,
-            ("Error parsing H.264 stream"),
-            ("The link to structure needed for the parsing couldn't be found"));
-        goto invalid_stream;
-      case GST_H264_PARSER_ERROR:
-        /* should not really occur either */
-        GST_ELEMENT_ERROR (h264parse, STREAM, FORMAT,
-            ("Error parsing H.264 stream"), ("Invalid H.264 stream"));
-        goto invalid_stream;
-      case GST_H264_PARSER_NO_NAL:
-        GST_ELEMENT_ERROR (h264parse, STREAM, FORMAT,
-            ("Error parsing H.264 stream"), ("No H.264 NAL unit found"));
-        goto invalid_stream;
-      case GST_H264_PARSER_BROKEN_DATA:
-        GST_WARNING_OBJECT (h264parse, "input stream is corrupt; "
-            "it contains a NAL unit of length %u", nalu.size);
-      broken:
-        /* broken nal at start -> arrange to skip it,
-         * otherwise have it terminate current au
-         * (and so it will be skipped on next frame round) */
-        if (current_off == 0) {
-          GST_DEBUG_OBJECT (h264parse, "skipping broken nal");
-          *skipsize = nalu.offset;
-          h264parse->aud_needed = TRUE;
-          goto skip;
-        } else {
-          GST_DEBUG_OBJECT (h264parse, "terminating au");
-          nalu.size = 0;
-          nalu.offset = nalu.sc_offset;
-          goto end;
-        }
-        break;
-      default:
-        g_assert_not_reached ();
-        break;
-    }
-
-    GST_DEBUG_OBJECT (h264parse, "%p complete nal found. Off: %u, Size: %u",
-        data, nalu.offset, nalu.size);
-
-    if (!nonext) {
-      if (nalu.offset + nalu.size + 4 + 2 > size) {
-        GST_DEBUG_OBJECT (h264parse, "not enough data for next NALU");
-        if (drain) {
-          GST_DEBUG_OBJECT (h264parse, "but draining anyway");
-          nonext = TRUE;
-        } else {
-          goto more;
-        }
-      }
-    }
-
-    if (!gst_h264_sec_parse_process_nal (h264parse, &nalu)) {
-      GST_WARNING_OBJECT (h264parse,
-          "broken/invalid nal Type: %d %s, Size: %u will be dropped",
-          nalu.type, _nal_name (nalu.type), nalu.size);
-      *skipsize = nalu.size;
-      h264parse->aud_needed = TRUE;
-      goto skip;
-    }
-
-    /* Judge whether or not to insert AU Delimiter in case of byte-stream
-     * If we're in the middle of au, we don't need to insert aud.
-     * Otherwise, we honor the result in gst_h264_sec_parse_process_nal.
-     * Note that this should be done until draining if it's happening.
-     */
-    if (h264parse->align == GST_H264_SEC_PARSE_ALIGN_NAL && !h264parse->aud_needed)
-      h264parse->aud_insert = FALSE;
-
-    if (nonext)
-      break;
-
-    /* if no next nal, we know it's complete here */
-    au_complete = gst_h264_sec_parse_collect_nal (h264parse, data, size, &nalu);
-
-    if (h264parse->align == GST_H264_SEC_PARSE_ALIGN_NAL) {
-      h264parse->aud_needed = au_complete;
-      break;
-    }
-
-    if (au_complete)
-      break;
-
-    GST_DEBUG_OBJECT (h264parse, "Looking for more");
-    current_off = nalu.offset + nalu.size;
-  }
-#endif
-
-#if 0
-end:
-  framesize = nalu.offset + nalu.size;
-
-  gst_buffer_unmap (buffer, &map);
-#endif
-
   gst_h264_sec_parse_parse_frame (parse, frame);
   *skipsize = 0;
 
   return gst_base_parse_finish_frame (parse, frame, size);
-
-#if 0
-more:
-  *skipsize = 0;
-
-  /* Restart parsing from here next time */
-  if (current_off > 0)
-    h264parse->current_off = current_off;
-
-  /* Fall-through. */
-out:
-  gst_buffer_unmap (buffer, &map);
-  return GST_FLOW_OK;
-
-drop:
-  GST_DEBUG_OBJECT (h264parse, "Dropped data");
-  return ret;
-
-skip:
-  GST_DEBUG_OBJECT (h264parse, "skipping %d", *skipsize);
-  /* If we are collecting access units, we need to preserve the initial
-   * config headers (SPS, PPS et al.) and only reset the frame if another
-   * slice NAL was received. This means that broken pictures are discarded */
-  if (h264parse->align != GST_H264_SEC_PARSE_ALIGN_AU ||
-      !(h264parse->state & GST_H264_SEC_PARSE_STATE_VALID_PICTURE_HEADERS) ||
-      (h264parse->state & GST_H264_SEC_PARSE_STATE_GOT_SLICE))
-    gst_h264_sec_parse_reset_frame (h264parse);
-  goto out;
-
-invalid_stream:
-  gst_buffer_unmap (buffer, &map);
-  return GST_FLOW_ERROR;
-#endif
 }
 
 /* byte together avc codec data based on collected pps and sps so far */
@@ -2085,142 +1763,6 @@ gst_h264_sec_parse_update_src_caps (GstH264SecParse * h264parse, GstCaps * caps)
     gst_buffer_unref (buf);
 }
 
-#if 0
-static void
-gst_h264_sec_parse_get_timestamp (GstH264SecParse * h264parse,
-    GstClockTime * out_ts, GstClockTime * out_dur, gboolean frame)
-{
-  GstH264SPS *sps = h264parse->nalparser->last_sps;
-  GstClockTime upstream;
-  gint duration = 1;
-
-  g_return_if_fail (out_dur != NULL);
-  g_return_if_fail (out_ts != NULL);
-
-  upstream = *out_ts;
-  GST_LOG_OBJECT (h264parse, "Upstream ts %" GST_TIME_FORMAT,
-      GST_TIME_ARGS (upstream));
-
-  if (!frame) {
-    GST_LOG_OBJECT (h264parse, "no frame data ->  0 duration");
-    *out_dur = 0;
-    goto exit;
-  } else {
-    *out_ts = upstream;
-  }
-
-  if (!sps) {
-    GST_DEBUG_OBJECT (h264parse, "referred SPS invalid");
-    goto exit;
-  } else if (!sps->vui_parameters_present_flag) {
-    GST_DEBUG_OBJECT (h264parse,
-        "unable to compute timestamp: VUI not present");
-    goto exit;
-  } else if (!sps->vui_parameters.timing_info_present_flag) {
-    GST_DEBUG_OBJECT (h264parse,
-        "unable to compute timestamp: timing info not present");
-    goto exit;
-  } else if (sps->vui_parameters.time_scale == 0) {
-    GST_DEBUG_OBJECT (h264parse,
-        "unable to compute timestamp: time_scale = 0 "
-        "(this is forbidden in spec; bitstream probably contains error)");
-    goto exit;
-  }
-
-  if (h264parse->sei_pic_struct_pres_flag &&
-      h264parse->sei_pic_struct != (guint8) - 1) {
-    /* Note that when h264parse->sei_pic_struct == -1 (unspecified), there
-     * are ways to infer its value. This is related to computing the
-     * TopFieldOrderCnt and BottomFieldOrderCnt, which looks
-     * complicated and thus not implemented for the time being. Yet
-     * the value we have here is correct for many applications
-     */
-    switch (h264parse->sei_pic_struct) {
-      case GST_H264_SEI_PIC_STRUCT_TOP_FIELD:
-      case GST_H264_SEI_PIC_STRUCT_BOTTOM_FIELD:
-        duration = 1;
-        break;
-      case GST_H264_SEI_PIC_STRUCT_FRAME:
-      case GST_H264_SEI_PIC_STRUCT_TOP_BOTTOM:
-      case GST_H264_SEI_PIC_STRUCT_BOTTOM_TOP:
-        duration = 2;
-        break;
-      case GST_H264_SEI_PIC_STRUCT_TOP_BOTTOM_TOP:
-      case GST_H264_SEI_PIC_STRUCT_BOTTOM_TOP_BOTTOM:
-        duration = 3;
-        break;
-      case GST_H264_SEI_PIC_STRUCT_FRAME_DOUBLING:
-        duration = 4;
-        break;
-      case GST_H264_SEI_PIC_STRUCT_FRAME_TRIPLING:
-        duration = 6;
-        break;
-      default:
-        GST_DEBUG_OBJECT (h264parse,
-            "h264parse->sei_pic_struct of unknown value %d. Not parsed",
-            h264parse->sei_pic_struct);
-        break;
-    }
-  } else {
-    duration = h264parse->field_pic_flag ? 1 : 2;
-  }
-
-  GST_LOG_OBJECT (h264parse, "frame tick duration %d", duration);
-
-  /*
-   * h264parse.264 C.1.2 Timing of coded picture removal (equivalent to DTS):
-   * Tr,n(0) = initial_cpb_removal_delay[ SchedSelIdx ] / 90000
-   * Tr,n(n) = Tr,n(nb) + Tc * cpb_removal_delay(n)
-   * where
-   * Tc = num_units_in_tick / time_scale
-   */
-
-  if (h264parse->ts_trn_nb != GST_CLOCK_TIME_NONE) {
-    GST_LOG_OBJECT (h264parse, "buffering based ts");
-    /* buffering period is present */
-    if (upstream != GST_CLOCK_TIME_NONE) {
-      /* If upstream timestamp is valid, we respect it and adjust current
-       * reference point */
-      h264parse->ts_trn_nb = upstream -
-          (GstClockTime) gst_util_uint64_scale
-          (h264parse->sei_cpb_removal_delay * GST_SECOND,
-          sps->vui_parameters.num_units_in_tick,
-          sps->vui_parameters.time_scale);
-    } else {
-      /* If no upstream timestamp is given, we write in new timestamp */
-      upstream = h264parse->dts = h264parse->ts_trn_nb +
-          (GstClockTime) gst_util_uint64_scale
-          (h264parse->sei_cpb_removal_delay * GST_SECOND,
-          sps->vui_parameters.num_units_in_tick,
-          sps->vui_parameters.time_scale);
-    }
-  } else {
-    GstClockTime dur;
-
-    GST_LOG_OBJECT (h264parse, "duration based ts");
-    /* naive method: no removal delay specified
-     * track upstream timestamp and provide best guess frame duration */
-    dur = gst_util_uint64_scale (duration * GST_SECOND,
-        sps->vui_parameters.num_units_in_tick, sps->vui_parameters.time_scale);
-    /* sanity check */
-    if (dur < GST_MSECOND) {
-      GST_DEBUG_OBJECT (h264parse, "discarding dur %" GST_TIME_FORMAT,
-          GST_TIME_ARGS (dur));
-    } else {
-      *out_dur = dur;
-    }
-  }
-
-exit:
-  if (GST_CLOCK_TIME_IS_VALID (upstream))
-    *out_ts = h264parse->dts = upstream;
-
-  if (GST_CLOCK_TIME_IS_VALID (*out_dur) &&
-      GST_CLOCK_TIME_IS_VALID (h264parse->dts))
-    h264parse->dts += *out_dur;
-}
-#endif
-
 static GstFlowReturn
 gst_h264_sec_parse_parse_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
 {
@@ -2232,15 +1774,6 @@ gst_h264_sec_parse_parse_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
   buffer = frame->buffer;
 
   gst_h264_sec_parse_update_src_caps (h264parse, NULL);
-
-#if 0
-  /* don't mess with timestamps if provided by upstream,
-   * particularly since our ts not that good they handle seeking etc */
-  if (h264parse->do_ts)
-    gst_h264_sec_parse_get_timestamp (h264parse,
-        &GST_BUFFER_TIMESTAMP (buffer), &GST_BUFFER_DURATION (buffer),
-        TRUE);
-#endif
 
   if (h264parse->keyframe)
     GST_BUFFER_FLAG_UNSET (buffer, GST_BUFFER_FLAG_DELTA_UNIT);
@@ -2257,42 +1790,8 @@ gst_h264_sec_parse_parse_frame (GstBaseParse * parse, GstBaseParseFrame * frame)
     h264parse->discont = FALSE;
   }
 
-#if 0
-  /* replace with transformed AVC output if applicable */
-  av = gst_adapter_available (h264parse->frame_out);
-  if (av) {
-    GstBuffer *buf;
-
-    buf = gst_adapter_take_buffer (h264parse->frame_out, av);
-    gst_buffer_copy_into (buf, buffer, GST_BUFFER_COPY_METADATA, 0, -1);
-    gst_buffer_replace (&frame->out_buffer, buf);
-    gst_buffer_unref (buf);
-  }
-#endif
-
   return GST_FLOW_OK;
 }
-
-#if 0
-/* sends a codec NAL downstream, decorating and transforming as needed.
- * No ownership is taken of @nal */
-static GstFlowReturn
-gst_h264_sec_parse_push_codec_buffer (GstH264SecParse * h264parse,
-    GstBuffer * nal, GstClockTime ts)
-{
-  GstMapInfo map;
-
-  gst_buffer_map (nal, &map, GST_MAP_READ);
-  nal = gst_h264_sec_parse_wrap_nal (h264parse, h264parse->format,
-      map.data, map.size);
-  gst_buffer_unmap (nal, &map);
-
-  GST_BUFFER_TIMESTAMP (nal) = ts;
-  GST_BUFFER_DURATION (nal) = 0;
-
-  return gst_pad_push (GST_BASE_PARSE_SRC_PAD (h264parse), nal);
-}
-#endif
 
 static GstEvent *
 check_pending_key_unit_event (GstEvent * pending_event,
