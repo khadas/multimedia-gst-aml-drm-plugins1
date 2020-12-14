@@ -13,8 +13,6 @@
 #include "secmem_ca.h"
 
 #define MAX_BUFS_COUNT    (511)
-#define MAX_SEC_MEMSZ     (16*1024*1024)
-#define MAX_SEC_LIMIT     (15*1024*1024)
 
 GST_DEBUG_CATEGORY_STATIC (gst_secmem_allocator_debug);
 #define GST_CAT_DEFAULT gst_secmem_allocator_debug
@@ -51,7 +49,6 @@ gst_secmem_allocator_init (GstSecmemAllocator * self)
     g_mutex_init (&self->mutex);
     g_cond_init (&self->cond);
     self->counter = 0;
-    self->total_used = 0;
     allocator->mem_type = GST_ALLOCATOR_SECMEM;
     allocator->mem_map = gst_secmem_mem_map;
     allocator->mem_unmap = gst_secmem_mem_unmap;
@@ -82,15 +79,21 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     secmem_handle_t handle;
     unsigned int ret;
     uint32_t maxsize = 0;
+    uint32_t available = 0;
 
     g_return_val_if_fail (GST_IS_SECMEM_ALLOCATOR (allocator), NULL);
     g_return_val_if_fail(self->sess != NULL, NULL);
 
     g_mutex_lock (&self->mutex);
-    while (self->counter >= MAX_BUFS_COUNT ||
-        self->total_used >= MAX_SEC_LIMIT) {
+
+    do {
+        if (Secure_V2_GetSecmemSize(self->sess, NULL, &available))
+            goto error_create;
+        if (self->counter < MAX_BUFS_COUNT && size < available)
+            break;
         g_cond_wait (&self->cond, &self->mutex);
-    }
+    } while (1);
+
     ret = Secure_V2_MemCreate(self->sess, &handle);
     if (ret) {
         GST_ERROR("MemCreate failed");
@@ -115,7 +118,6 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     }
     mem->size = size;
     GST_INFO("alloc dma %d maxsize %d", fd, maxsize);
-    self->total_used += maxsize;
     self->counter++;
     g_mutex_unlock (&self->mutex);
     return mem;
@@ -144,7 +146,6 @@ gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
     GST_ALLOCATOR_CLASS (parent_class)->free(allocator, memory);
     Secure_V2_MemFree(self->sess, handle);
     Secure_V2_MemRelease(self->sess, handle);
-    self->total_used -= maxsize;
     self->counter--;
     g_cond_broadcast (&self->cond);
     g_mutex_unlock (&self->mutex);
@@ -344,20 +345,18 @@ gint gst_secmem_get_free_buf_num(GstMemory *mem)
 
 gint gst_secmem_get_free_buf_size(GstMemory *mem)
 {
-    gint sz;
+    uint32_t available = 0;
+
     g_return_val_if_fail(mem != NULL, -1);
     g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), -1);
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     g_mutex_lock (&self->mutex);
-    sz = MAX_SEC_MEMSZ - self->total_used;
+    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available) == 0, -1);
     g_mutex_unlock (&self->mutex);
-    return sz;
+    return available;
 }
-//gint gst_secmem_allocator_get_available(GstAllocator *allocator)
-//{
-//
-//}
+
 secmem_handle_t gst_buffer_get_secmem_handle(GstBuffer *buffer)
 {
     GstMemory *mem = gst_buffer_peek_memory(buffer, 0);
