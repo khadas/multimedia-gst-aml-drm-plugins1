@@ -131,6 +131,19 @@ error_create:
     return NULL;
 }
 
+gint gst_secmem_check_free_buf_size(GstAllocator * allocator)
+{
+    uint32_t available = 0;
+    g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (allocator), -1);
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (allocator);
+    g_return_val_if_fail(self->sess != NULL, NULL);
+    g_mutex_lock (&self->mutex);
+    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available) == 0, -1);
+    g_mutex_unlock (&self->mutex);
+    return available;
+}
+
+
 void
 gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
 {
@@ -180,7 +193,7 @@ gst_secmem_mem_share (GstMemory * gmem, gssize offset, gssize size)
 }
 
 GstAllocator *
-gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9)
+gst_secmem_allocator_new (gboolean is_4k, uint8_t decoder_format)
 {
     unsigned int ret;
     uint32_t flag;
@@ -192,14 +205,19 @@ gst_secmem_allocator_new (gboolean is_4k, gboolean is_vp9)
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (alloc);
     self->is_4k = is_4k;
-    self->is_vp9 = is_vp9;
+    self->is_vp9 = decoder_format == SECMEM_DECODER_VP9 ? TRUE: FALSE;
+    self->is_av1 = decoder_format == SECMEM_DECODER_AV1 ? TRUE : FALSE;
 
 
     ret = Secure_V2_SessionCreate(&self->sess);
     g_return_val_if_fail(ret == 0, alloc);
     flag = is_4k ? 2 : 1;
-    if (is_vp9) {
+    if (self->is_vp9) {
         flag |= 0x09 << 4;
+    }
+    else if (self->is_av1)
+    {
+        flag |= 0x0A << 4;
     }
     ret = Secure_V2_Init(self->sess, 1, flag, 0, 0);
     g_return_val_if_fail(ret == 0, alloc);
@@ -307,6 +325,23 @@ gst_secmem_parse_vp9(GstMemory *mem)
     return TRUE;
 }
 
+gboolean
+gst_secmem_parse_av1(GstMemory *mem)
+{
+    uint32_t ret;
+    uint32_t handle;
+    uint32_t header_size;
+
+    handle = gst_secmem_memory_get_handle(mem);
+    g_return_val_if_fail(handle != 0, FALSE);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_Parse(self->sess, STREAM_TYPE_AV1, handle, NULL, 0, &header_size);
+    g_return_val_if_fail(ret == 0, FALSE);
+    mem->size += header_size;
+    return TRUE;
+}
+
 secmem_handle_t gst_secmem_memory_get_handle (GstMemory *mem)
 {
     g_return_val_if_fail(mem != NULL, 0);
@@ -388,4 +423,19 @@ gboolean gst_buffer_copy_to_secmem(GstBuffer *dst, GstBuffer *src)
     ret = gst_secmem_fill(mem, 0, map.data, map.size);
     gst_buffer_unmap(src, &map);
     return ret;
+}
+
+gboolean gst_buffer_sideband_secmem(GstBuffer *dst)
+{
+    unsigned int ret;
+    GstMapInfo map;
+    GstMemory *mem;
+    uint32_t handle;
+    mem = gst_buffer_peek_memory(dst, 0);
+    g_return_val_if_fail(gst_is_secmem_memory(mem), FALSE);
+    handle = gst_secmem_memory_get_handle(mem);
+    g_return_val_if_fail(handle != 0, FALSE);
+    ret = Secure_SetHandle(handle);
+    g_return_val_if_fail(ret == 0, FALSE);
+    return TRUE;
 }
