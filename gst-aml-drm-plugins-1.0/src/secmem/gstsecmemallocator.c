@@ -12,8 +12,6 @@
 #include "gstsecmemallocator.h"
 #include "secmem_ca.h"
 
-#define MAX_BUFS_COUNT    (511)
-
 GST_DEBUG_CATEGORY_STATIC (gst_secmem_allocator_debug);
 #define GST_CAT_DEFAULT gst_secmem_allocator_debug
 
@@ -48,7 +46,6 @@ gst_secmem_allocator_init (GstSecmemAllocator * self)
     GstAllocator *allocator = GST_ALLOCATOR_CAST(self);
     g_mutex_init (&self->mutex);
     g_cond_init (&self->cond);
-    self->counter = 0;
     allocator->mem_type = GST_ALLOCATOR_SECMEM;
     allocator->mem_map = gst_secmem_mem_map;
     allocator->mem_unmap = gst_secmem_mem_unmap;
@@ -79,7 +76,8 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     secmem_handle_t handle;
     unsigned int ret;
     uint32_t maxsize = 0;
-    uint32_t available = 0;
+    uint32_t mem_available = 0;
+    uint32_t handle_available = 0;
 
     g_return_val_if_fail (GST_IS_SECMEM_ALLOCATOR (allocator), NULL);
     g_return_val_if_fail(self->sess != NULL, NULL);
@@ -87,9 +85,9 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     g_mutex_lock (&self->mutex);
 
     do {
-        if (Secure_V2_GetSecmemSize(self->sess, NULL, &available))
+        if (Secure_V2_GetSecmemSize(self->sess, NULL, &mem_available, NULL, &handle_available))
             goto error_create;
-        if (self->counter < MAX_BUFS_COUNT && size < available)
+        if (handle_available > 0 && size < mem_available)
             break;
         g_cond_wait (&self->cond, &self->mutex);
     } while (1);
@@ -118,7 +116,6 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
     }
     mem->size = size;
     GST_INFO("alloc dma %d maxsize %d", fd, maxsize);
-    self->counter++;
     g_mutex_unlock (&self->mutex);
     return mem;
 
@@ -138,7 +135,7 @@ gint gst_secmem_check_free_buf_size(GstAllocator * allocator)
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (allocator);
     g_return_val_if_fail(self->sess != NULL, NULL);
     g_mutex_lock (&self->mutex);
-    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available) == 0, -1);
+    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available, NULL, NULL) == 0, -1);
     g_mutex_unlock (&self->mutex);
     return available;
 }
@@ -159,7 +156,6 @@ gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
     GST_ALLOCATOR_CLASS (parent_class)->free(allocator, memory);
     Secure_V2_MemFree(self->sess, handle);
     Secure_V2_MemRelease(self->sess, handle);
-    self->counter--;
     g_cond_broadcast (&self->cond);
     g_mutex_unlock (&self->mutex);
 }
@@ -365,15 +361,15 @@ secmem_paddr_t gst_secmem_memory_get_paddr (GstMemory *mem)
 
 gint gst_secmem_get_free_buf_num(GstMemory *mem)
 {
-    gint cnt;
+    unsigned int handle_available = 0;
     g_return_val_if_fail(mem != NULL, -1);
     g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), -1);
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     g_mutex_lock (&self->mutex);
-    cnt = MAX_BUFS_COUNT - self->counter;
+    Secure_V2_GetSecmemSize(self->sess, NULL, NULL, NULL, &handle_available);
     g_mutex_unlock (&self->mutex);
-    return cnt;
+    return (gint)handle_available;
 
 }
 
@@ -386,7 +382,7 @@ gint gst_secmem_get_free_buf_size(GstMemory *mem)
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     g_mutex_lock (&self->mutex);
-    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available) == 0, -1);
+    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available, NULL, NULL) == 0, -1);
     g_mutex_unlock (&self->mutex);
     return available;
 }

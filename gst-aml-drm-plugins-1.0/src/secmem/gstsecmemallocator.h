@@ -43,7 +43,6 @@ struct _GstSecmemAllocator
     gboolean                is_4k;
     gboolean                is_vp9;
     gboolean                is_av1;
-    gsize                   counter;
     GCond                   cond;
     GMutex                  mutex;
 };
