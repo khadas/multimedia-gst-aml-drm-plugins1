@@ -14,7 +14,8 @@ plugin_LTLIBRARIES = libgstamlsecparse.la
 ##############################################################################
 
 # sources used to compile this plug-in
-libgstamlsecparse_la_SOURCES = gst_aml_sec_parse.c gsth264_sec_parse.c gstvp9_sec_trans.c
+libgstamlsecparse_la_SOURCES = gst_aml_sec_parse.c gsth264_sec_parse.c gstvp9_sec_trans.c \
+							gstav1_sec_trans.c
 
 # compiler and linker flags used to compile this plugin, set in configure.ac
 libgstamlsecparse_la_CFLAGS = \

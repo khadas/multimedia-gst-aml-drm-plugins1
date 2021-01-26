@@ -3,6 +3,7 @@
 #endif
 #include "gsth264_sec_parse.h"
 #include "gstvp9_sec_trans.h"
+#include "gstav1_sec_trans.h"
 
 static gboolean
 plugin_init (GstPlugin * plugin)
@@ -14,6 +15,9 @@ plugin_init (GstPlugin * plugin)
     ret |= gst_element_register(plugin, "vp9_sec_trans",
             GST_RANK_PRIMARY,
             GST_TYPE_VP9_SEC_TRANS);
+    ret |= gst_element_register(plugin, "av1_sec_trans",
+            GST_RANK_PRIMARY,
+            GST_TYPE_AV1_SEC_TRANS);
     return ret;
 }
 
