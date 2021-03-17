@@ -195,7 +195,7 @@ gst_secmem_allocator_new (gboolean is_4k, uint8_t decoder_format)
     uint32_t flag;
     GstAllocator *alloc;
 
-    is_4k = TRUE; //Force 4K
+    //is_4k = TRUE; //Force 4K
     alloc = g_object_new(GST_TYPE_SECMEM_ALLOCATOR, NULL);
     gst_object_ref_sink(alloc);
 
@@ -217,7 +217,7 @@ gst_secmem_allocator_new (gboolean is_4k, uint8_t decoder_format)
     }
     ret = Secure_V2_Init(self->sess, 1, flag, 0, 0);
     g_return_val_if_fail(ret == 0, alloc);
-    GST_INFO("init success");
+    GST_INFO("secmem init return %d, flag %x", ret, flag);
 
     return alloc;
 }
