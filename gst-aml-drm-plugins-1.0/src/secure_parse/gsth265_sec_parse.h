@@ -1,6 +1,7 @@
-/* GStreamer H.265 Parser
- * Copyright (C) 2013 Intel Corporation
- *   Contact: Sreerenj Balachandran <sreerenj.balachandran@intel.com>
+/* GStreamer H.265 Secure Parser
+ *
+ * Copyright (C) <2021> Amlogic Inc.
+ *
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -18,8 +19,8 @@
  * Boston, MA 02110-1301, USA.
  */
 
-#ifndef __GST_H265_PARSE_H__
-#define __GST_H265_PARSE_H__
+#ifndef __GST_H265_SEC_PARSE_H__
+#define __GST_H265_SEC_PARSE_H__
 
 #include <gst/gst.h>
 #include <gst/base/gstbaseparse.h>
@@ -27,23 +28,23 @@
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_H265_PARSE \
-  (gst_h265_parse_get_type())
-#define GST_H265_PARSE(obj) \
-  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_H265_PARSE,GstH265Parse))
-#define GST_H265_PARSE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_H265_PARSE,GstH265ParseClass))
-#define GST_IS_H265_PARSE(obj) \
-  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_H265_PARSE))
-#define GST_IS_H265_PARSE_CLASS(klass) \
-  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_H265_PARSE))
+#define GST_TYPE_H265_SEC_PARSE \
+  (gst_h265_sec_parse_get_type())
+#define GST_H265_SEC_PARSE(obj) \
+  (G_TYPE_CHECK_INSTANCE_CAST((obj),GST_TYPE_H265_SEC_PARSE,GstH265SecParse))
+#define GST_H265_SEC_PARSE_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_CAST((klass),GST_TYPE_H265_SEC_PARSE,GstH265SecParseClass))
+#define GST_IS_H265_SEC_PARSE(obj) \
+  (G_TYPE_CHECK_INSTANCE_TYPE((obj),GST_TYPE_H265_SEC_PARSE))
+#define GST_IS_H265_SEC_PARSE_CLASS(klass) \
+  (G_TYPE_CHECK_CLASS_TYPE((klass),GST_TYPE_H265_SEC_PARSE))
 
-GType gst_h265_parse_get_type (void);
+GType gst_h265_sec_parse_get_type (void);
 
-typedef struct _GstH265Parse GstH265Parse;
-typedef struct _GstH265ParseClass GstH265ParseClass;
+typedef struct _GstH265SecParse GstH265SecParse;
+typedef struct _GstH265SecParseClass GstH265SecParseClass;
 
-struct _GstH265Parse
+struct _GstH265SecParse
 {
   GstBaseParse baseparse;
 
@@ -67,6 +68,7 @@ struct _GstH265Parse
   guint state;
   guint align;
   guint format;
+  guint format_org;
   gint current_off;
 
   GstClockTime last_report;
@@ -91,7 +93,7 @@ struct _GstH265Parse
   guint8 sei_pic_struct;
 
   /* Collected TimeCode SEI */
-  GstH265TimeCode time_code;
+  //GstH265TimeCode time_code;
 
   gboolean discont;
 
@@ -113,7 +115,7 @@ struct _GstH265Parse
   GstEvent *force_key_unit_event;
 };
 
-struct _GstH265ParseClass
+struct _GstH265SecParseClass
 {
   GstBaseParseClass parent_class;
 };

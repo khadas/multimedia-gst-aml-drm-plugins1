@@ -69,6 +69,8 @@ gboolean        gst_secmem_store_csd(GstMemory *mem, uint8_t *buffer, uint32_t l
 gboolean        gst_secmem_prepend_csd(GstMemory *mem);
 gboolean        gst_secmem_parse_avcc(GstMemory *mem, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag);
+gboolean        gst_secmem_parse_hvcc(GstMemory *mem, uint8_t *buffer, uint32_t length);
+gboolean        gst_secmem_parse_hvc2nalu(GstMemory *mem, uint32_t *flag);
 gboolean        gst_secmem_parse_vp9(GstMemory *mem);
 gboolean        gst_secmem_parse_av1(GstMemory *mem);
 gint            gst_secmem_check_free_buf_size(GstAllocator * allocator);

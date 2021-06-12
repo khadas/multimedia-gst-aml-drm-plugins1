@@ -304,6 +304,34 @@ gst_secmem_parse_avc2nalu(GstMemory *mem, uint32_t *flag)
 }
 
 gboolean
+gst_secmem_parse_hvcc(GstMemory *mem, uint8_t *buffer, uint32_t length)
+{
+    uint32_t ret;
+    g_return_val_if_fail(mem != NULL, -1);
+    g_return_val_if_fail(GST_IS_SECMEM_ALLOCATOR (mem->allocator), -1);
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_Parse(self->sess, STREAM_TYPE_HVCC, 0, buffer, length, NULL);
+    g_return_val_if_fail(ret == 0, FALSE);
+
+    return TRUE;
+}
+
+gboolean
+gst_secmem_parse_hvc2nalu(GstMemory *mem, uint32_t *flag)
+{
+    uint32_t ret;
+    uint32_t handle;
+
+    handle = gst_secmem_memory_get_handle(mem);
+    g_return_val_if_fail(handle != 0, FALSE);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_Parse(self->sess, STREAM_TYPE_HVC2NALU, handle, NULL, 0, flag);
+    g_return_val_if_fail(ret == 0, FALSE);
+    return TRUE;
+}
+
+gboolean
 gst_secmem_parse_vp9(GstMemory *mem)
 {
     uint32_t ret;

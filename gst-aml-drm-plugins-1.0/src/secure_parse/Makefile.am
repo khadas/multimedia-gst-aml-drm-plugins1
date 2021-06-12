@@ -15,7 +15,7 @@ plugin_LTLIBRARIES = libgstamlsecparse.la
 
 # sources used to compile this plug-in
 libgstamlsecparse_la_SOURCES = gst_aml_sec_parse.c gsth264_sec_parse.c gstvp9_sec_trans.c \
-							gstav1_sec_trans.c
+							gstav1_sec_trans.c gsth265_sec_parse.c
 
 # compiler and linker flags used to compile this plugin, set in configure.ac
 libgstamlsecparse_la_CFLAGS = \
@@ -30,4 +30,4 @@ libgstamlsecparse_la_LIBADD = \
 libgstamlsecparse_la_LDFLAGS = $(GST_PLUGIN_LDFLAGS)
 libgstamlsecparse_la_LIBTOOLFLAGS = --tag=disable-static
 
-include_HEADERS = gsth264_sec_parse.h  gstvp9_sec_trans.h
+include_HEADERS = gsth264_sec_parse.h gsth265_sec_parse.h  gstvp9_sec_trans.h
