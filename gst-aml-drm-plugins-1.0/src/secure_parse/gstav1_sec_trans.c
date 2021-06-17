@@ -72,7 +72,7 @@ gst_av1_sec_trans_class_init (GstAv1SecTransClass * klass)
 
     gst_element_class_set_details_simple(element_class,
             "Secure AV1 convertor",
-            "Codec/Parser/Converter/Video",
+            "Codec/Parser/Video",
             "Amlogic Secure AV1 Plugin",
             "song.zhao@amlogic.com");
 }

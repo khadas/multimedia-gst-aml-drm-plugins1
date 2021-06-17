@@ -72,7 +72,7 @@ gst_vp9_sec_trans_class_init (GstVp9SecTransClass * klass)
 
     gst_element_class_set_details_simple(element_class,
             "Secure VP9 convertor",
-            "Codec/Parser/Converter/Video",
+            "Codec/Parser/Video",
             "Amlogic Secure VP9 Plugin",
             "song.zhao@amlogic.com");
 }
