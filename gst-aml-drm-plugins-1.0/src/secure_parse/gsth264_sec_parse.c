@@ -1690,6 +1690,7 @@ gst_h264_sec_parse_update_src_caps (GstH264SecParse * h264parse, GstCaps * caps)
   }
 
   if (caps) {
+    gint par_n = 0, par_d = 0;
     guint size = gst_caps_get_size(caps);
     for (unsigned i = 0; i < size; ++i) {
       gst_caps_set_features(caps, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
@@ -1715,6 +1716,14 @@ gst_h264_sec_parse_update_src_caps (GstH264SecParse * h264parse, GstCaps * caps)
 
       /* relax the profile constraint to find a suitable decoder */
       ensure_caps_profile (h264parse, caps, sps);
+    }
+
+    if (s)
+      gst_structure_get_fraction (s, "pixel-aspect-ratio", &par_n, &par_d);
+    if (par_n != 0 && par_d != 0) {
+      GST_INFO_OBJECT (h264parse, "PAR %d/%d", par_n, par_d);
+      gst_caps_set_simple (caps, "pixel-aspect-ratio", GST_TYPE_FRACTION,
+          par_n, par_d, NULL);
     }
 
     src_caps = gst_pad_get_current_caps (GST_BASE_PARSE_SRC_PAD (h264parse));

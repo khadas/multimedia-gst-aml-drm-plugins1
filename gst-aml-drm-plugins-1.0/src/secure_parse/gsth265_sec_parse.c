@@ -1549,7 +1549,7 @@ gst_h265_sec_parse_update_src_caps (GstH265SecParse * h265parse, GstCaps * caps)
   }
 
   if (caps) {
-    gint par_n, par_d;
+    gint par_n = 0, par_d = 0;
     guint size = gst_caps_get_size(caps);
     for (unsigned i = 0; i < size; ++i) {
       gst_caps_set_features(caps, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
@@ -1561,9 +1561,9 @@ gst_h265_sec_parse_update_src_caps (GstH265SecParse * h265parse, GstCaps * caps)
         "alignment", G_TYPE_STRING,
         gst_h265_sec_parse_get_string (h265parse, FALSE, h265parse->align), NULL);
 
-    gst_h265_sec_parse_get_par (h265parse, &par_n, &par_d);
-    if (par_n != 0 && par_d != 0 &&
-        (!s || !gst_structure_has_field (s, "pixel-aspect-ratio"))) {
+    if (s)
+      gst_structure_get_fraction (s, "pixel-aspect-ratio", &par_n, &par_d);
+    if (par_n != 0 && par_d != 0) {
       GST_INFO_OBJECT (h265parse, "PAR %d/%d", par_n, par_d);
       gst_caps_set_simple (caps, "pixel-aspect-ratio", GST_TYPE_FRACTION,
           par_n, par_d, NULL);
