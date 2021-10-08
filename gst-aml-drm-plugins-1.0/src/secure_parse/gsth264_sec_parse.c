@@ -742,13 +742,21 @@ gst_h264_sec_parse_process_nal (GstH264SecParse * h264parse, GstH264NalUnit * na
     case GST_H264_NAL_SUBSET_SPS:
       if (!GST_H264_SEC_PARSE_STATE_VALID (h264parse, GST_H264_SEC_PARSE_STATE_GOT_SPS))
         return FALSE;
+#if GST_CHECK_VERSION(1,18,0)
+      pres = gst_h264_parser_parse_subset_sps (nalparser, nalu, &sps);
+#else
       pres = gst_h264_parser_parse_subset_sps (nalparser, nalu, &sps, TRUE);
+#endif
       goto process_sps;
 
     case GST_H264_NAL_SPS:
       /* reset state, everything else is obsolete */
       h264parse->state = 0;
+#if GST_CHECK_VERSION(1,18,0)
+      pres = gst_h264_parser_parse_sps (nalparser, nalu, &sps);
+#else
       pres = gst_h264_parser_parse_sps (nalparser, nalu, &sps, TRUE);
+#endif
 
     process_sps:
       /* arranged for a fallback sps.id, so use that one and only warn */
