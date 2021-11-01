@@ -1,4 +1,4 @@
-/*
+：/*
  * gst_ge2d_flip.c
  *
  *  Created on: 2020年11月3日
@@ -315,6 +315,7 @@ gst_ge2d_flip_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *ou
     guint inbuf_n, outbuf_n;
     int i;
     int plane = GST_VIDEO_INFO_N_PLANES(&plugin->in_info);
+    GstVideoMeta *meta_data = NULL;
 
     aml_ge2d_info_t *pge2dinfo = plugin->pge2dinfo;
 
@@ -339,11 +340,12 @@ gst_ge2d_flip_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *ou
 
     g_return_val_if_fail(inbuf_n == outbuf_n && inbuf_n > 0, ret);
 
+    meta_data = gst_buffer_get_video_meta(inbuf);
     pge2dinfo->src_info[0].memtype = GE2D_CANVAS_ALLOC;
     pge2dinfo->src_info[0].mem_alloc_type = AML_GE2D_MEM_DMABUF;
-    pge2dinfo->src_info[0].plane_number = plane;                               /* When allocating memory, it is a continuous block or separate multiple blocks */
-    pge2dinfo->src_info[0].canvas_w = ALIGN_PAD(GST_VIDEO_INFO_WIDTH(&plugin->in_info), 64); /* input width */
-    pge2dinfo->src_info[0].canvas_h = ALIGN_PAD(GST_VIDEO_INFO_HEIGHT(&plugin->in_info), 64); /* input height */
+    pge2dinfo->src_info[0].plane_number = plane;                             /* When allocating memory, it is a continuous block or separate multiple blocks */
+    pge2dinfo->src_info[0].canvas_w = meta_data->stride[0];                  /* input width */
+    pge2dinfo->src_info[0].canvas_h = meta_data->height;                     /* input height */
     pge2dinfo->src_info[0].format = PIXEL_FORMAT_YCbCr_420_SP_NV12;
     pge2dinfo->src_info[0].rect.x = 0;                                       /* input process area x */
     pge2dinfo->src_info[0].rect.y = 0;                                       /* input process area y */
@@ -351,11 +353,12 @@ gst_ge2d_flip_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *ou
     pge2dinfo->src_info[0].rect.h = GST_VIDEO_INFO_HEIGHT(&plugin->in_info); /* input process area h */
     pge2dinfo->src_info[0].plane_alpha = 0xFF;                               /* global plane alpha*/
 
+    meta_data = gst_buffer_get_video_meta(outbuf);
     pge2dinfo->dst_info.memtype = GE2D_CANVAS_ALLOC;
     pge2dinfo->dst_info.mem_alloc_type = AML_GE2D_MEM_DMABUF;
     pge2dinfo->dst_info.plane_number = plane;                                /* When allocating memory, it is a continuous block or separate multiple blocks */
-    pge2dinfo->dst_info.canvas_w = ALIGN_PAD(GST_VIDEO_INFO_WIDTH(&plugin->out_info), 64); /* output width */
-    pge2dinfo->dst_info.canvas_h = ALIGN_PAD(GST_VIDEO_INFO_HEIGHT(&plugin->out_info), 64); /* output width */
+    pge2dinfo->dst_info.canvas_w = meta_data->stride[0];                     /* output width */
+    pge2dinfo->dst_info.canvas_h = meta_data->height;                        /* output height */
     pge2dinfo->dst_info.format = PIXEL_FORMAT_YCbCr_420_SP_NV12;
     pge2dinfo->dst_info.rect.x = 0;                                          /* output process area x */
     pge2dinfo->dst_info.rect.y = 0;                                          /* output process area y */
