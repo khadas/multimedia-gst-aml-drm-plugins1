@@ -1,4 +1,4 @@
-：/*
+/*
  * gst_ge2d_flip.c
  *
  *  Created on: 2020年11月3日
@@ -16,7 +16,9 @@ enum
 {
     PROP_0,
     PROP_METHOD,
-    PROP_SECURE
+    PROP_SECURE,
+    PROP_OUT_WIDTH,
+    PROP_OUT_HEIGHT
 };
 #define ALIGN_PAD(x, y) (((x) + ((y)-1)) & (~((y)-1)))
 
@@ -83,6 +85,16 @@ gst_ge2d_flip_set_property(GObject *object, guint prop_id, const GValue *value, 
         plugin->secure = g_value_get_boolean(value);
         GST_OBJECT_UNLOCK(plugin);
         break;
+    case PROP_OUT_WIDTH:
+        GST_OBJECT_LOCK(plugin);
+        plugin->width_set = g_value_get_uint(value);
+        GST_OBJECT_UNLOCK(plugin);
+        break;
+    case PROP_OUT_HEIGHT:
+        GST_OBJECT_LOCK(plugin);
+        plugin->height_set = g_value_get_uint(value);
+        GST_OBJECT_UNLOCK(plugin);
+        break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
         break;
@@ -104,6 +116,16 @@ gst_ge2d_flip_get_property(GObject *object, guint prop_id, GValue *value, GParam
     case PROP_SECURE:
         GST_OBJECT_LOCK(plugin);
         g_value_set_boolean(value, plugin->secure);
+        GST_OBJECT_UNLOCK(plugin);
+        break;
+    case PROP_OUT_WIDTH:
+        GST_OBJECT_LOCK(plugin);
+        g_value_set_uint(value, plugin->width_set);
+        GST_OBJECT_UNLOCK(plugin);
+        break;
+    case PROP_OUT_HEIGHT:
+        GST_OBJECT_LOCK(plugin);
+        g_value_set_uint(value, plugin->height_set);
         GST_OBJECT_UNLOCK(plugin);
         break;
     default:
@@ -228,17 +250,52 @@ gst_ge2d_flip_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
     for (i = 0; i < gst_caps_get_size(ret); i++)
     {
         GstStructure *structure = gst_caps_get_structure(ret, i);
-        gint par_n, par_d;
-
+        gint par_n, par_d, height_set, width_set;
         if (gst_structure_get_int(structure, "width", &width) &&
             gst_structure_get_int(structure, "height", &height))
         {
+            if (direction == GST_PAD_SINK)
+            {
+                plugin->width_src = width;
+                plugin->height_src = height;
+                if (plugin->width_set == 0)
+                {
+                    width_set = width;
+                } else {
+                    width_set = plugin->width_set;
+                }
+                if (plugin->height_set == 0)
+                {
+                    height_set = height;
+                } else {
+                    height_set = plugin->height_set;
+                }
+            } else {
+                switch (plugin->method)
+                {
+                case GST_VIDEO_ORIENTATION_90R:
+                case GST_VIDEO_ORIENTATION_90L:
+                    width_set = plugin->height_src;
+                    height_set = plugin->width_src;
+                    break;
+                case GST_VIDEO_ORIENTATION_IDENTITY:
+                case GST_VIDEO_ORIENTATION_180:
+                case GST_VIDEO_ORIENTATION_HORIZ:
+                case GST_VIDEO_ORIENTATION_VERT:
+                    width_set = plugin->width_src;
+                    height_set = plugin->height_src;
+                    break;
+                default:
+                g_assert_not_reached();
+                }
+            }
+
             switch (plugin->method)
             {
             case GST_VIDEO_ORIENTATION_90R:
             case GST_VIDEO_ORIENTATION_90L:
-                gst_structure_set(structure, "width", G_TYPE_INT, height,
-                                  "height", G_TYPE_INT, width, NULL);
+                gst_structure_set(structure, "width", G_TYPE_INT, height_set,
+                                  "height", G_TYPE_INT, width_set, NULL);
                 if (gst_structure_get_fraction(structure, "pixel-aspect-ratio",
                                                &par_n, &par_d))
                 {
@@ -256,11 +313,15 @@ gst_ge2d_flip_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
                 }
                 break;
             case GST_VIDEO_ORIENTATION_IDENTITY:
+                gst_structure_set(structure, "width", G_TYPE_INT, width_set,
+                                  "height", G_TYPE_INT, height_set, NULL);
+                gst_base_transform_set_passthrough(trans, TRUE);
+                break;
             case GST_VIDEO_ORIENTATION_180:
             case GST_VIDEO_ORIENTATION_HORIZ:
             case GST_VIDEO_ORIENTATION_VERT:
-                gst_structure_set(structure, "width", G_TYPE_INT, width,
-                                  "height", G_TYPE_INT, height, NULL);
+                gst_structure_set(structure, "width", G_TYPE_INT, width_set,
+                                  "height", G_TYPE_INT, height_set, NULL);
 
                 break;
             default:
@@ -285,11 +346,30 @@ gst_ge2d_flip_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
     return ret;
 }
 
+static pixel_format_t pluginFormat4ge2d(GstVideoFormat pluginvideoFormat)
+{
+    pixel_format_t ge2dfomat;
+    switch (pluginvideoFormat)
+    {
+    case GST_VIDEO_FORMAT_NV21:
+    case GST_VIDEO_FORMAT_NV12:
+        ge2dfomat = PIXEL_FORMAT_YCbCr_420_SP_NV12;
+        break;
+    default:
+        ge2dfomat = -1;
+        break;
+    }
+    return ge2dfomat;
+}
+
 static GE2D_ROTATION pluginOriMethod2ge2d(GstVideoOrientationMethod pluginRotation)
 {
     GE2D_ROTATION ge2dratation;
     switch (pluginRotation)
     {
+    case GST_VIDEO_ORIENTATION_IDENTITY:
+        ge2dratation = GE2D_ROTATION_0;
+        break;
     case GST_VIDEO_ORIENTATION_90R:
         ge2dratation = GE2D_ROTATION_90;
         break;
@@ -336,17 +416,14 @@ gst_ge2d_flip_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *ou
         pge2dinfo->dst_info.shared_fd[i] = gst_fd_memory_get_fd(mem);
     }
 
-    pge2dinfo->mem_sec = 1;
-
-    g_return_val_if_fail(inbuf_n == outbuf_n && inbuf_n > 0, ret);
-
     meta_data = gst_buffer_get_video_meta(inbuf);
+//    pge2dinfo->mem_sec = plugin->secure ? 1 : 0;
     pge2dinfo->src_info[0].memtype = GE2D_CANVAS_ALLOC;
     pge2dinfo->src_info[0].mem_alloc_type = AML_GE2D_MEM_DMABUF;
     pge2dinfo->src_info[0].plane_number = plane;                             /* When allocating memory, it is a continuous block or separate multiple blocks */
     pge2dinfo->src_info[0].canvas_w = meta_data->stride[0];                  /* input width */
     pge2dinfo->src_info[0].canvas_h = meta_data->height;                     /* input height */
-    pge2dinfo->src_info[0].format = PIXEL_FORMAT_YCbCr_420_SP_NV12;
+    pge2dinfo->src_info[0].format = pluginFormat4ge2d(GST_VIDEO_INFO_FORMAT(&plugin->in_info));
     pge2dinfo->src_info[0].rect.x = 0;                                       /* input process area x */
     pge2dinfo->src_info[0].rect.y = 0;                                       /* input process area y */
     pge2dinfo->src_info[0].rect.w = GST_VIDEO_INFO_WIDTH(&plugin->in_info);  /* input process area w */
@@ -359,7 +436,7 @@ gst_ge2d_flip_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *ou
     pge2dinfo->dst_info.plane_number = plane;                                /* When allocating memory, it is a continuous block or separate multiple blocks */
     pge2dinfo->dst_info.canvas_w = meta_data->stride[0];                     /* output width */
     pge2dinfo->dst_info.canvas_h = meta_data->height;                        /* output height */
-    pge2dinfo->dst_info.format = PIXEL_FORMAT_YCbCr_420_SP_NV12;
+    pge2dinfo->dst_info.format = pluginFormat4ge2d(GST_VIDEO_INFO_FORMAT(&plugin->out_info));
     pge2dinfo->dst_info.rect.x = 0;                                          /* output process area x */
     pge2dinfo->dst_info.rect.y = 0;                                          /* output process area y */
     pge2dinfo->dst_info.rect.w = GST_VIDEO_INFO_WIDTH(&plugin->out_info);    /* output process area w */
@@ -369,17 +446,25 @@ gst_ge2d_flip_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *ou
     pge2dinfo->dst_info.rotation = pluginOriMethod2ge2d(plugin->method);
     pge2dinfo->ge2d_op = AML_GE2D_STRETCHBLIT;
 
+    if (pge2dinfo->src_info[0].format == -1 || pge2dinfo->dst_info.format == -1) {
+        GST_ERROR("ge2d not support format src_info[0].format %d, dst_info.format %d",pge2dinfo->src_info[0].format, pge2dinfo->dst_info.format);
+        goto beach;
+    }
     //ge2d begin rotation
+    GST_LOG_OBJECT(plugin, "pge2dinfo: in_rect_w %d in_rect_h %d canvas_w %d canvas_h %d out_rect_w %d out_rect_h %d canvas_w %d canvas_h %d" , \
+                            pge2dinfo->src_info[0].rect.w, pge2dinfo->src_info[0].rect.h, \
+                            pge2dinfo->src_info[0].canvas_w,pge2dinfo->src_info[0].canvas_h,\
+                            pge2dinfo->dst_info.rect.w, pge2dinfo->dst_info.rect.h,\
+                            pge2dinfo->dst_info.canvas_w,pge2dinfo->dst_info.canvas_h);
     ret = aml_ge2d_process(pge2dinfo);
 
-    if (ret < 0){
-        GST_ERROR("ge2d process failed, %s (%d)", __func__, __LINE__);
+    if (ret < 0) {
+        GST_ERROR("ge2d process failed");
         goto beach;
     }
 
     ret = GST_FLOW_OK;
 beach:
-    GST_ERROR("%s %d", __FUNCTION__, __LINE__);
     return ret;
 }
 
@@ -420,6 +505,18 @@ gst_ge2d_flip_class_init(GstGe2dFlipClass *klass)
                                     g_param_spec_boolean("secure", "Use Secure",
                                                          "Use Secure DRM based memory for allocation",
                                                          FALSE, G_PARAM_WRITABLE));
+    g_object_class_install_property (gobject_class, PROP_OUT_WIDTH,
+                                    g_param_spec_uint ("out-width", "out-width",
+                                                       "out width set can reduce the ge2d bandwidth pressure, 0 is not set ",
+                                                       0, G_MAXUINT, 0,
+                                                       G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+                                                       G_PARAM_STATIC_STRINGS));
+    g_object_class_install_property (gobject_class, PROP_OUT_HEIGHT,
+                                    g_param_spec_uint ("out-height", "out-height",
+                                                       "out height set can reduce the ge2d bandwidth pressure, 0 is not set ",
+                                                       0, G_MAXUINT, 0,
+                                                       G_PARAM_READWRITE | GST_PARAM_MUTABLE_PLAYING |
+                                                       G_PARAM_STATIC_STRINGS));
 
     gst_element_class_set_details_simple(element_class,
                                          "Amlogic GE2D Plugin",

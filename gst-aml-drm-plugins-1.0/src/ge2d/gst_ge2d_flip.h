@@ -40,6 +40,10 @@ struct _GstGe2dFlip
 
     GstVideoOrientationMethod   method;
     gboolean                    secure;
+    gint                        width_set;
+    gint                        height_set;
+    gint                        width_src;
+    gint                        height_src;
     GstVideoInfo                in_info;
     GstVideoInfo                out_info;
 
