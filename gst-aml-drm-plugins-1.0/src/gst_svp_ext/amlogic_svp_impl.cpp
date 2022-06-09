@@ -60,14 +60,14 @@ Sec_Result SecOpaqueBuffer_CopyByIndex(GstMemory *mem, Sec_OpaqueBufferHandle *s
     uint32_t size[num_indexes];
 
     if (NULL == mem || NULL == src) {
-        LOG(eWarning, "Null pointer arg encountered");
+        LOG(eWarning, "Null pointer arg encountered\n");
         return SEC_RESULT_FAILURE;
     }
 
     /* overflow check */
     for (i = 0; i < num_indexes; i++) {
         if (copy_array[i].offset_in_target + copy_array[i].bytes_to_copy > mem->size) {
-            LOG(eWarning, "attempt to write beyond opaque buffer boundary in %zd", i);
+            LOG(eWarning, "attempt to write beyond opaque buffer boundary in %zd\n", i);
             goto error;
         }
     }
@@ -85,7 +85,7 @@ error:
 
 Sec_Result SecOpaqueBuffer_Free(Sec_OpaqueBufferHandle *handle)
 {
-    LOG(eWarning, "secopaque buffer free %x", handle->secmem_handle);
+    LOG(eWarning, "secopaque buffer free %x\n", handle->secmem_handle);
     gst_secmem_free_handle(x_allocator, handle->secmem_handle);
     return SEC_RESULT_SUCCESS;
 }
@@ -108,23 +108,23 @@ static gboolean ReleaseSecMemAllocator()
 
     if(x_allocator) {
         refCounts = GST_OBJECT_REFCOUNT_VALUE(x_allocator);
-        LOG(eWarning, "secmem allocator (%p) refcount: %d\n", x_allocator, refCounts);
+        LOG(eTrace, "secmem allocator (%p) refcount: %d\n", x_allocator, refCounts);
     } else {
-        LOG(eWarning, "secmem allocator already released!\n");
+        LOG(eTrace, "secmem allocator already released!\n");
         retVal = true;
     }
 
     if (x_allocator && (refCounts == 1)) {
-        LOG(eWarning, "unreffing secmem allocator\n");
+        LOG(eTrace, "unreffing secmem allocator\n");
         gst_object_unref(x_allocator);
 
         x_allocator = NULL;
 
-        LOG(eWarning, "released secmem allocator !\n");
+        LOG(eTrace, "released secmem allocator !\n");
 #ifdef ESSOS_RM
         if (g_rm) {
             if (g_resAssignedId >= 0) {
-                LOG(eWarning, "Essos resMgr: releasing secmem allocator resource id: %d\n", g_resAssignedId);
+                LOG(eTrace, "Essos resMgr: releasing secmem allocator resource id: %d\n", g_resAssignedId);
                 EssRMgrReleaseResource (g_rm, EssRMgrResType_svpAllocator, g_resAssignedId);
                 g_resAssignedId = -1;
             }
@@ -134,7 +134,7 @@ static gboolean ReleaseSecMemAllocator()
     }
 
     if(refCounts > 1) {
-        LOG(eWarning, "can't release secmem allocator due to refCounts held by gst buffers !\n");
+        LOG(eTrace, "can't release secmem allocator due to refCounts held by gst buffers !\n");
     }
 
     return retVal;
@@ -329,7 +329,7 @@ static gboolean allocate_secure_memory(void * pContext, GstBuffer** ppBuffer, si
 #endif
     if(!CheckFlowControl(allocator, false)) {
         // Below low watermarks for handles or memory
-        LOG(eError, "Secmem buffers or handles below watermark, no memory available\n");
+        LOG(eTrace, "Secmem buffers or handles below watermark, no memory available\n");
     }
 
     LOG(eTrace, "Creating a secmem buffer of %d size\n", nSize);
@@ -572,8 +572,8 @@ gboolean gst_buffer_append_svp_transform_impl(void* pContext, GstBuffer* buffer,
 
             secResult = SecOpaqueBuffer_CopyByIndex(mem, pBufferFrom, copyArray.data(), subSampleCount);
             if (secResult != SEC_RESULT_SUCCESS) {
-                LOG(eError, "ERROR: SecOpaqueBuffer_CopyByIndex failed result = %d", secResult);
-                LOG(eError, "Transfering data to handle = %x index = %d, from index = %d, length = %d", handle, byteIndex, encByteIndex, inEncrypted);
+                LOG(eError, "ERROR: SecOpaqueBuffer_CopyByIndex failed result = %d\n", secResult);
+                LOG(eError, "Transfering data to handle = %x index = %d, from index = %d, length = %d\n", handle, byteIndex, encByteIndex, inEncrypted);
                 return false;
             }
             gst_byte_reader_set_pos(reader, 0);
@@ -586,7 +586,7 @@ gboolean gst_buffer_append_svp_transform_impl(void* pContext, GstBuffer* buffer,
 
             retVal = true;
 
-            // LOG(eTrace, "Buffer RefCount buffer %d, secmem %d, mem %d",
+            // LOG(eTrace, "Buffer RefCount buffer %d, secmem %d, mem %d\n",
             //             GST_OBJECT_REFCOUNT_VALUE(buffer), GST_OBJECT_REFCOUNT_VALUE(buffer_secmem), GST_OBJECT_REFCOUNT_VALUE(mem));
 
             svp_buffer_free_token(pBufferFrom);
@@ -619,7 +619,7 @@ gboolean gst_buffer_append_svp_transform_impl(void* pContext, GstBuffer* buffer,
             gst_opaque_buf.secmem_handle = handle;
             gst_opaque_buf.dataBufSize = (SEC_SIZE)bufSize;
             mem->size = (SEC_SIZE)bufSize;
-            // LOG(eTrace, "Copying %d bytes to secure buffer of size %d", gst_opaque_buf.dataBufSize, bufSize);
+            // LOG(eTrace, "Copying %d bytes to secure buffer of size %d\n", gst_opaque_buf.dataBufSize, bufSize);
             SEC_CopyIndex copy_array;
 
             copy_array.offset_in_src = 0;
@@ -639,7 +639,7 @@ gboolean gst_buffer_append_svp_transform_impl(void* pContext, GstBuffer* buffer,
             /* This function will release the pointer and destroy the underlying secmem handle */
             bool ret = svp_buffer_free_token(pBufferFrom);
             if (!ret) {
-                LOG(eWarning, "gst_buffer_append_svp_transform_impl - SecOpaqueBuffer_Free returned %d", ret);
+                LOG(eWarning, "gst_buffer_append_svp_transform_impl - SecOpaqueBuffer_Free returned %d\n", ret);
             }
 
             // LOG(eWarning, "Buffer RefCount buffer %d, secmem %d, mem %d\n",
@@ -757,7 +757,7 @@ gboolean svp_pipeline_buffers_available_impl(void * pContext, media_type mediaTy
         retVal = true;
     } else if(!CheckFlowControl(allocator, false)) {
         // Below low watermarks for handles or memory
-        LOG(eError, "Secmem buffers or handles below watermark, no memory available\n");
+        LOG(eTrace, "Secmem buffers or handles below watermark, no memory available\n");
         retVal = false;
     }
 
