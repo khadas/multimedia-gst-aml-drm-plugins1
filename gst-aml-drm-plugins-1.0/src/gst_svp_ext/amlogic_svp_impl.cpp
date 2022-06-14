@@ -222,7 +222,7 @@ static GstAllocator* GetSecMemAllocator()
             return NULL;
         }
 #endif
-        x_allocator = gst_secmem_allocator_new(false, SECMEM_DECODER_DEFAULT);
+        x_allocator = gst_secmem_allocator_new_ex(SECMEM_DECODER_DEFAULT, 0);
         LOG(eWarning, "Secmem Allocator Init %p\n", x_allocator);
     }
 

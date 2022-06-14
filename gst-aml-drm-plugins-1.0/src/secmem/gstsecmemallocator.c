@@ -201,6 +201,44 @@ gst_secmem_mem_share (GstMemory * gmem, gssize offset, gssize size)
 }
 
 GstAllocator *
+gst_secmem_allocator_new_ex (uint8_t decoder_format, uint8_t reserved) {
+    unsigned int ret;
+    uint32_t flag;
+    GstAllocator *alloc;
+    uint32_t capacity = 0;
+    uint32_t setsize = 0;
+
+    alloc = g_object_new(GST_TYPE_SECMEM_ALLOCATOR, NULL);
+    gst_object_ref_sink(alloc);
+
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (alloc);
+    self->is_vp9 = decoder_format == SECMEM_DECODER_VP9 ? TRUE: FALSE;
+    self->is_av1 = decoder_format == SECMEM_DECODER_AV1 ? TRUE : FALSE;
+
+    ret = Secure_V2_SessionCreate(&self->sess);
+    g_return_val_if_fail(ret == 0, alloc);
+
+    capacity = Secure_GetSecmemSize();
+    g_return_val_if_fail(capacity > 0, alloc);
+
+    //custom set sec size
+    flag = 3;
+    if (self->is_vp9) {
+        flag |= 0x09 << 4;
+    } else if (self->is_av1) {
+        flag |= 0x0A << 4;
+    }
+    setsize = CEIL_POS(((uint32_t)(capacity >> 20) + 1) * 0.75);
+    if(setsize > 12)
+        setsize = 12;
+    ret = Secure_V2_Init(self->sess, 1, flag, 0, setsize);
+    g_return_val_if_fail(ret == 0, alloc);
+    GST_INFO("secmem init return %d, flag %x", ret, flag);
+
+    return alloc;
+}
+
+GstAllocator *
 gst_secmem_allocator_new (gboolean is_4k, uint8_t decoder_format)
 {
     unsigned int ret;
