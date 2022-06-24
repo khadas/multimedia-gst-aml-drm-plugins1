@@ -911,7 +911,9 @@ gboolean gst_svp_ext_transform_caps_impl(GstCaps **caps, gboolean bEncrypted)
                 VP9						memory:SecMem
                 AV1						memory:SecMem
             */
-            if( gst_structure_has_field(structure, "stream-format") && !g_strcmp0(gst_structure_get_string(structure, "stream-format"), "byte-stream")) {
+            if ( gst_structure_has_field(structure, "stream-format") &&
+                 !g_strcmp0(gst_structure_get_string(structure, "stream-format"), "byte-stream") &&
+                 !g_strcmp0(gst_structure_get_string(structure, "alignment"), "au")) {
                 gst_caps_set_features(ret, i, gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_DMABUF));
             } else {
                 gst_caps_set_features(ret, i, gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_SECMEM_MEMORY));
