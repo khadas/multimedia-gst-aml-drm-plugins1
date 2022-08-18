@@ -135,7 +135,8 @@ gint gst_secmem_check_free_buf_size(GstAllocator * allocator)
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (allocator);
     g_return_val_if_fail(self->sess != NULL, -1);
     g_mutex_lock (&self->mutex);
-    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available, NULL, NULL) == 0, -1);
+    if (Secure_V2_GetSecmemSize(self->sess, NULL, &available, NULL, NULL))
+        available = -1;
     g_mutex_unlock (&self->mutex);
     return available;
 }
@@ -488,7 +489,8 @@ gint gst_secmem_get_free_buf_size(GstMemory *mem)
 
     GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
     g_mutex_lock (&self->mutex);
-    g_return_val_if_fail(Secure_V2_GetSecmemSize(self->sess, NULL, &available, NULL, NULL) == 0, -1);
+    if (Secure_V2_GetSecmemSize(self->sess, NULL, &available, NULL, NULL))
+        available = -1;
     g_mutex_unlock (&self->mutex);
     return available;
 }
