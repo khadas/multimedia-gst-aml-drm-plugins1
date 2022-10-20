@@ -150,7 +150,8 @@ gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
     g_mutex_lock (&self->mutex);
     int fd = gst_fd_memory_get_fd(memory);
     secmem_handle_t handle = Secure_V2_FdToHandle(self->sess, fd);
-
+    if (handle == -1)
+        GST_ERROR("handle or fd invalid");
     size = gst_memory_get_sizes (memory, NULL, &maxsize);
 
     GST_INFO("free dma %d size %d max size %d", fd, size, maxsize);
