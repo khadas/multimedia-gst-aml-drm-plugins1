@@ -152,6 +152,10 @@ gst_vp9_sec_trans_transform_caps(GstBaseTransform *trans, GstPadDirection direct
                 gst_caps_set_simple (ret, "height", G_TYPE_INT, height, NULL);
             }
         }
+        unsigned size = gst_caps_get_size(ret);
+        for (unsigned i = 0; i < size; ++i) {
+            gst_caps_set_features(ret, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
+        }
         GST_DEBUG_OBJECT (plugin, "ret caps:%" GST_PTR_FORMAT, ret);
         break;
     }
@@ -160,7 +164,7 @@ gst_vp9_sec_trans_transform_caps(GstBaseTransform *trans, GstPadDirection direct
             ret = gst_caps_copy(caps);
             unsigned size = gst_caps_get_size(ret);
             for (unsigned i = 0; i < size; ++i) {
-                gst_caps_set_features(ret, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_DMABUF));
+                gst_caps_set_features(ret, i, gst_caps_features_from_string(GST_CAPS_FEATURE_MEMORY_SECMEM_MEMORY));
             }
         }  else {
             ret = gst_caps_copy(srccaps);
