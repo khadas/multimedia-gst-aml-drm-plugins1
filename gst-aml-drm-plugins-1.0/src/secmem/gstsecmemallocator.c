@@ -186,7 +186,7 @@ gst_secmem_mem_share (GstMemory * gmem, gssize offset, gssize size)
 }
 
 GstAllocator *
-gst_secmem_allocator_new_ex (uint8_t decoder_format, uint8_t reserved) {
+gst_secmem_allocator_new_ex (uint8_t decoder_format, uint32_t reserved) {
     unsigned int ret;
     uint32_t flag;
     GstAllocator *alloc;
@@ -216,9 +216,10 @@ gst_secmem_allocator_new_ex (uint8_t decoder_format, uint8_t reserved) {
     setsize = CEIL_POS(((uint32_t)(capacity >> 20) + 1) * 0.75);
     if(setsize > 12)
         setsize = 12;
+    flag |= reserved;
     ret = Secure_V2_Init(self->sess, 1, flag, 0, setsize);
     g_return_val_if_fail(ret == 0, alloc);
-    GST_INFO("secmem init return %d, flag %x", ret, flag);
+    GST_INFO("secmem init return %d, flag 0x%x", ret, flag);
 
     return alloc;
 }

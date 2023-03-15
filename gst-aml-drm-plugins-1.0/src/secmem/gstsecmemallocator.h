@@ -72,7 +72,7 @@ enum {
 
 GType           gst_secmem_allocator_get_type (void);
 GstAllocator *  gst_secmem_allocator_new (gboolean is_4k, uint8_t decoder_format);
-GstAllocator *  gst_secmem_allocator_new_ex (uint8_t decoder_format, uint8_t reserved);
+GstAllocator *  gst_secmem_allocator_new_ex (uint8_t decoder_format, uint32_t reserved);
 gboolean        gst_is_secmem_memory (GstMemory *mem);
 gboolean        gst_secmem_fill(GstMemory *mem, uint32_t offset, uint8_t *buffer, uint32_t length);
 gboolean        gst_secmem_copybyhandle(GstMemory *mem, uint32_t dst_handle, uint32_t range, uint32_t dst_offset[], uint32_t src_offset[], uint32_t size[]);

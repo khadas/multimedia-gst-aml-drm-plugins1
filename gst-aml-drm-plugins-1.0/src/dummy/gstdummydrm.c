@@ -40,6 +40,12 @@ static GstCaps*         gst_dummydrm_transform_caps(GstBaseTransform *trans, Gst
 static GstFlowReturn    gst_dummydrm_prepare_output_buffer(GstBaseTransform * trans, GstBuffer *input, GstBuffer **outbuf);
 static GstFlowReturn    gst_dummydrm_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf);
 
+enum
+{
+    PROP_0,
+    PROP_IS_4K,
+    PROP_STREAM_MODE,
+};
 
 static void
 gst_dummydrm_class_init (GstDummyDrmClass * klass)
@@ -57,6 +63,17 @@ gst_dummydrm_class_init (GstDummyDrmClass * klass)
     base_class->prepare_output_buffer = GST_DEBUG_FUNCPTR(gst_dummydrm_prepare_output_buffer);
     base_class->passthrough_on_same_caps = FALSE;
     base_class->transform_ip_on_passthrough = FALSE;
+
+    g_object_class_install_property(gobject_class, PROP_IS_4K,
+                                    g_param_spec_boolean("is-4k", "is-4k",
+                                                         "is 4k stream",
+                                                         FALSE,
+                                                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
+    g_object_class_install_property(gobject_class, PROP_STREAM_MODE,
+                                    g_param_spec_boolean("stream-mode", "stream-mode",
+                                                         "secmem stream mode",
+                                                         FALSE,
+                                                         G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
     gst_element_class_add_pad_template (element_class,
             gst_static_pad_template_get (&sinktemplate));
@@ -78,19 +95,56 @@ gst_dummydrm_init(GstDummyDrm * plugin)
 
     plugin->allocator = NULL;
     plugin->outcaps = NULL;
-
+    plugin->is_4k = FALSE;
+    plugin->stream_mode = FALSE;
 }
 
 void
 gst_dummydrm_set_property(GObject * object, guint prop_id, const GValue * value, GParamSpec * pspec)
 {
-    //TODO
+    GstDummyDrm *plugin = GST_DUMMYDRM(object);
+    switch (prop_id)
+    {
+    case PROP_IS_4K:
+    {
+        plugin->is_4k = g_value_get_boolean(value);
+        GST_DEBUG_OBJECT(plugin, "set PROP_IS_4K:%d", plugin->is_4k);
+        break;
+    }
+    case PROP_STREAM_MODE:
+    {
+        plugin->stream_mode = g_value_get_boolean(value);
+        GST_DEBUG_OBJECT(plugin, "set PROP_STREAM_MODE:%d", plugin->stream_mode);
+        break;
+    }
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
+    }
 }
 
 void
 gst_dummydrm_get_property(GObject * object, guint prop_id, GValue * value, GParamSpec * pspec)
 {
-    //TODO
+    GstDummyDrm *plugin = GST_DUMMYDRM(object);
+    switch (prop_id)
+    {
+    case PROP_IS_4K:
+    {
+        g_value_set_boolean(value, plugin->is_4k);
+        GST_DEBUG_OBJECT(plugin, "get PROP_IS_4K:%d", plugin->is_4k);
+        break;
+    }
+    case PROP_STREAM_MODE:
+    {
+        g_value_set_boolean(value, plugin->stream_mode);
+        GST_DEBUG_OBJECT(plugin, "get PROP_STREAM_MODE:%d", plugin->stream_mode);
+        break;
+    }
+    default:
+        G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
+        break;
+    }
 }
 
 gboolean
@@ -144,11 +198,18 @@ gst_dummydrm_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
                     find = true;
                     gst_caps_set_features(ret, i,
                             gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_SECMEM_MEMORY));
+                    if (g_str_has_suffix (gst_structure_get_name (structure), "/mpegts")) {
+                        plugin->stream_mode = TRUE;
+                        GST_DEBUG_OBJECT (plugin, "source suffix is mpegts, config streammode is true.");
+                    }
                 }
             }
             if (find) {
                 if (!plugin->allocator) {
-                    plugin->allocator = gst_secmem_allocator_new(false, false);
+                    uint32_t flag = (plugin->is_4k ? 2 : 1);
+                    if (plugin->stream_mode)
+                        flag |= (1<<8);
+                    plugin->allocator = gst_secmem_allocator_new_ex(false, flag);
                 }
                 if (plugin->outcaps) {
                     gst_caps_unref(plugin->outcaps);

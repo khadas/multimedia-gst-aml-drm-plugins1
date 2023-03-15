@@ -39,7 +39,8 @@ struct _GstDummyDrm
     GstCaps                *outcaps;
     GstAllocator           *allocator;
 
-
+    gboolean                is_4k;
+    gboolean                stream_mode;
 };
 
 struct _GstDummyDrmClass {
