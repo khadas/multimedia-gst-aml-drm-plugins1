@@ -86,44 +86,28 @@ gst_secmem_mem_alloc (GstAllocator * allocator, gsize size,
 
     do {
         if (Secure_V2_GetSecmemSize(self->sess, NULL, &mem_available, NULL, &handle_available))
-            goto error_create;
+            goto error;
         if (handle_available > 0 && size < mem_available)
             break;
         g_cond_wait (&self->cond, &self->mutex);
     } while (1);
 
-    ret = Secure_V2_MemCreate(self->sess, &handle);
+    ret = Secure_V2_MemAllocDMA(self->sess, size, &fd, &handle, &maxsize);
     if (ret) {
-        GST_ERROR("MemCreate failed");
-        goto error_create;
-    }
-
-    ret = Secure_V2_MemAlloc(self->sess, handle, size, NULL);
-    if (ret) {
-        GST_ERROR("MemAlloc failed");
-        goto error_alloc;
-    }
-
-    ret = Secure_V2_MemExport(self->sess, handle, &fd, &maxsize);
-    if (ret) {
-        GST_ERROR("MemExport failed");
-        goto error_export;
+        GST_ERROR("MemAllocDMA failed");
+        goto error;
     }
     mem = gst_fd_allocator_alloc(allocator, fd, maxsize, GST_FD_MEMORY_FLAG_NONE);
     if (!mem) {
         GST_ERROR("gst_fd_allocator_alloc failed");
-        goto error_export;
+        goto error;
     }
     mem->size = size;
     GST_INFO("alloc dma %d maxsize %d", fd, maxsize);
     g_mutex_unlock (&self->mutex);
     return mem;
 
-error_export:
-    Secure_V2_MemFree(self->sess, handle);
-error_alloc:
-    Secure_V2_MemRelease(self->sess, handle);
-error_create:
+error:
     g_mutex_unlock (&self->mutex);
     return NULL;
 }
@@ -156,8 +140,7 @@ gst_secmem_mem_free(GstAllocator *allocator, GstMemory *memory)
 
     GST_INFO("free dma %d size %d max size %d", fd, size, maxsize);
     GST_ALLOCATOR_CLASS (parent_class)->free(allocator, memory);
-    Secure_V2_MemFree(self->sess, handle);
-    Secure_V2_MemRelease(self->sess, handle);
+    Secure_V2_MemRelease(self->sess, handle); //Auto free when release
     g_cond_broadcast (&self->cond);
     g_mutex_unlock (&self->mutex);
 }
