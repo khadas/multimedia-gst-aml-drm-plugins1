@@ -99,6 +99,9 @@ AC_SUBST(GST_PLUGIN_LDFLAGS)
 
 AC_PROG_CXX
 
+AC_CHECK_LIB([wfd_hdcp],[malloc],[have_wfd_hdcp=yes],[have_wfd_hdcp=no])
+AM_CONDITIONAL(BUILD_WFD_HDCP, test "x$have_wfd_hdcp" = "xyes")
+
 AC_CONFIG_FILES([Makefile
 src/Makefile
 src/secmem/Makefile
@@ -106,6 +109,7 @@ src/secmem/gstsecmemallocator.pc
 src/secure_parse/Makefile
 src/dummy/Makefile
 src/gst_svp_ext/Makefile
+src/hdcp/Makefile
 ])
 AC_OUTPUT
 

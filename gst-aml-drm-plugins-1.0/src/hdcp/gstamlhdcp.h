@@ -10,7 +10,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
-#include "hdcp_module.h"
+#include <wfd_hdcp/hdcp_module.h>
 
 G_BEGIN_DECLS
 
