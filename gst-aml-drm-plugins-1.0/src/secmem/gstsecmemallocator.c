@@ -280,6 +280,20 @@ gst_secmem_fill(GstMemory *mem, uint32_t offset, uint8_t *buffer, uint32_t lengt
 }
 
 gboolean
+gst_secmem_fillbypaddr(GstMemory *mem, uint32_t src_paddr)
+{
+    uint32_t ret;
+    uint32_t handle;
+    handle = gst_secmem_memory_get_handle(mem);
+    g_return_val_if_fail(handle != 0, FALSE);
+    GST_INFO("mem->size %d", mem->size);
+    GstSecmemAllocator *self = GST_SECMEM_ALLOCATOR (mem->allocator);
+    ret = Secure_V2_MemFillByPaddr(self->sess, handle, src_paddr, mem->size);
+    g_return_val_if_fail(ret == 0, FALSE);
+    return TRUE;
+}
+
+gboolean
 gst_secmem_copybyhandle(GstMemory *mem, uint32_t src_handle, uint32_t range, uint32_t dst_offset[], uint32_t src_offset[], uint32_t size[])
 {
     uint32_t ret;
