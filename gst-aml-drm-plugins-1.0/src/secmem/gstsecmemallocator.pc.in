@@ -13,5 +13,5 @@ Name: GStreamer
 Description: Streaming media framework
 Version: @VERSION@
 Requires: gstreamer-base-@GST_API_VERSION@
-Libs: -L${libdir} -lgstsecmemallocator -lsecmem -lamavutils
+Libs: -L${libdir} -lgstsecmemallocator
 Cflags: -I${includedir}
