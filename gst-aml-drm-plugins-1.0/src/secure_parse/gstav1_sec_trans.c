@@ -131,7 +131,7 @@ gst_av1_sec_trans_transform_caps(GstBaseTransform *trans, GstPadDirection direct
     case GST_PAD_SINK:
     {
         if (gst_caps_can_intersect(caps, sinkcaps)) {
-            gint width, height;
+            gint width, height, num, denom;
             GstStructure *s = gst_structure_copy(gst_caps_get_structure (caps, 0));
 
             ret = gst_caps_copy(srccaps);
@@ -150,6 +150,12 @@ gst_av1_sec_trans_transform_caps(GstBaseTransform *trans, GstPadDirection direct
                     gst_structure_get_int (s, "height", &height);
                 }
                 gst_caps_set_simple (ret, "height", G_TYPE_INT, height, NULL);
+            }
+            if (s) {
+                if (gst_structure_has_field (s, "framerate")) {
+                    gst_structure_get_fraction( s, "framerate", &num, &denom );
+                    gst_caps_set_simple (ret, "framerate", GST_TYPE_FRACTION, num, denom, NULL);
+                }
             }
         }
         unsigned size = gst_caps_get_size(ret);
