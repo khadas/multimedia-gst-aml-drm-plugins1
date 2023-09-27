@@ -10,6 +10,7 @@
 
 #include <gst/gst.h>
 #include <gst/base/gstbasetransform.h>
+#include <gst/base/gstadapter.h>
 
 G_BEGIN_DECLS
 
@@ -41,6 +42,10 @@ struct _GstDummyDrm
 
     gboolean                is_4k;
     gboolean                stream_mode;
+
+    GstPadChainFunction     base_chain;
+    gboolean                need_alignment;
+    GstAdapter             *adapter;
 };
 
 struct _GstDummyDrmClass {

@@ -13,7 +13,8 @@
 #include "gstdummydrm.h"
 #include "gstsecmemallocator.h"
 
-
+#define TS_PKT_SIZE 188
+#define TS_BUFFER_SIZE (160 * TS_PKT_SIZE)
 
 GST_DEBUG_CATEGORY_STATIC (gst_dummydrm_debug);
 #define GST_CAT_DEFAULT gst_dummydrm_debug
@@ -39,6 +40,8 @@ static gboolean         gst_dummydrm_stop(GstBaseTransform *trans);
 static GstCaps*         gst_dummydrm_transform_caps(GstBaseTransform *trans, GstPadDirection direction, GstCaps *caps, GstCaps *filter);
 static GstFlowReturn    gst_dummydrm_prepare_output_buffer(GstBaseTransform * trans, GstBuffer *input, GstBuffer **outbuf);
 static GstFlowReturn    gst_dummydrm_transform(GstBaseTransform *trans, GstBuffer *inbuf, GstBuffer *outbuf);
+static GstFlowReturn    gst_dummydrm_chain (GstPad * pad, GstObject * parent, GstBuffer * buffer);
+static gboolean         gst_dummydrm_sink_eventfunc (GstBaseTransform * trans, GstEvent * event);
 
 enum
 {
@@ -56,6 +59,8 @@ gst_dummydrm_class_init (GstDummyDrmClass * klass)
 
     gobject_class->set_property = gst_dummydrm_set_property;
     gobject_class->get_property = gst_dummydrm_get_property;
+
+    base_class->sink_event = GST_DEBUG_FUNCPTR(gst_dummydrm_sink_eventfunc);
     base_class->start = GST_DEBUG_FUNCPTR(gst_dummydrm_start);
     base_class->stop = GST_DEBUG_FUNCPTR(gst_dummydrm_stop);
     base_class->transform_caps = GST_DEBUG_FUNCPTR(gst_dummydrm_transform_caps);
@@ -97,6 +102,112 @@ gst_dummydrm_init(GstDummyDrm * plugin)
     plugin->outcaps = NULL;
     plugin->is_4k = FALSE;
     plugin->stream_mode = FALSE;
+    plugin->need_alignment = FALSE;
+    plugin->adapter = NULL;
+    plugin->base_chain= base->sinkpad->chainfunc;
+    gst_pad_set_chain_function(base->sinkpad, gst_dummydrm_chain);
+}
+
+static GstFlowReturn gst_dummydrm_chain (GstPad * pad, GstObject * parent, GstBuffer * inbuf)
+{
+    GstDummyDrm * plugin = NULL;
+    GstBuffer * outbuf = NULL;
+    guint available = 0;
+
+    plugin = (GstDummyDrm *)gst_pad_get_parent(pad);
+
+    if (!plugin)
+        return GST_FLOW_ERROR;
+    if (G_UNLIKELY(plugin->need_alignment && !plugin->adapter))
+    {
+        plugin->adapter = gst_adapter_new();
+        if (!plugin->adapter)
+            return GST_FLOW_ERROR;
+    }
+    if (!plugin->base_chain)
+        return GST_FLOW_ERROR;
+
+    if (plugin->adapter)
+    {
+        gst_adapter_push(plugin->adapter, inbuf);
+        available = gst_adapter_available(plugin->adapter);
+        if (available >= TS_BUFFER_SIZE)
+        {
+            outbuf = gst_adapter_take_buffer(plugin->adapter, TS_BUFFER_SIZE);
+            if (outbuf)
+            {
+                GST_DEBUG_OBJECT(plugin, "got %d bytes from adaptor. pass to base chain func", TS_BUFFER_SIZE);
+                goto base;
+            }
+            else
+            {
+                GST_DEBUG_OBJECT(plugin, "get buf from adaptor meet error");
+                return GST_FLOW_ERROR;
+            }
+        }
+        else
+        {
+            GST_DEBUG_OBJECT(plugin, "adaptor available size:%d < needed size:%d. wait more data", available, TS_BUFFER_SIZE);
+            return GST_FLOW_OK;
+        }
+    }
+
+base:
+    return plugin->base_chain(pad, parent, outbuf);
+}
+
+static gboolean gst_dummydrm_sink_eventfunc (GstBaseTransform * trans, GstEvent * event)
+{
+    gboolean ret = TRUE;
+    GstDummyDrm *plugin = GST_DUMMYDRM(trans);
+
+    GST_DEBUG_OBJECT(plugin, "event: %" GST_PTR_FORMAT, event);
+
+    switch (GST_EVENT_TYPE (event)) {
+        case GST_EVENT_FLUSH_START:
+        {
+            if (plugin && plugin->adapter)
+                gst_adapter_clear(plugin->adapter);
+            break;
+        }
+        case GST_EVENT_EOS:
+        {
+            if (plugin && plugin->adapter)
+            {
+                guint available;
+                guint available_aligned;
+                GstBuffer *lastbuf;
+                GstBaseTransform *base = GST_BASE_TRANSFORM (plugin);
+
+                available = gst_adapter_available(plugin->adapter);
+                available_aligned = available / TS_PKT_SIZE * TS_PKT_SIZE;
+                if (available_aligned)
+                {
+                    lastbuf = gst_adapter_take_buffer(plugin->adapter, available_aligned);
+                    if (lastbuf)
+                    {
+                        GST_DEBUG_OBJECT(plugin, "meet eos. got %d bytes from adaptor. pass to base chain func", available_aligned);
+                        plugin->base_chain(base->sinkpad, plugin, lastbuf);
+                    }
+                    else
+                    {
+                        GST_DEBUG_OBJECT(plugin, "get buf from adaptor meet error");
+                    }
+                }
+                gst_adapter_clear(plugin->adapter);
+            }
+            break;
+        }
+        default:
+            break;
+    }
+
+    if (GST_BASE_TRANSFORM_CLASS(parent_class)->sink_event)
+        ret = GST_BASE_TRANSFORM_CLASS(parent_class)->sink_event(trans, event);
+    else
+        gst_event_unref (event);
+
+    return ret;
 }
 
 void
@@ -166,6 +277,11 @@ gst_dummydrm_stop(GstBaseTransform *trans)
     if (plugin->outcaps) {
         gst_caps_unref(plugin->outcaps);
     }
+    if (plugin->adapter) {
+        gst_adapter_clear(plugin->adapter);
+        gst_object_unref(plugin->adapter);
+        plugin->adapter = NULL;
+    }
     return TRUE;
 }
 
@@ -200,7 +316,8 @@ gst_dummydrm_transform_caps(GstBaseTransform *trans, GstPadDirection direction,
                             gst_caps_features_from_string (GST_CAPS_FEATURE_MEMORY_SECMEM_MEMORY));
                     if (g_str_has_suffix (gst_structure_get_name (structure), "/mpegts")) {
                         plugin->stream_mode = TRUE;
-                        GST_DEBUG_OBJECT (plugin, "source suffix is mpegts, config streammode is true.");
+                        plugin->need_alignment = TRUE;
+                        GST_DEBUG_OBJECT (plugin, "source suffix is mpegts, config streammode is true, config need_alignment to true.");
                     }
                 }
             }
