@@ -186,7 +186,8 @@ gst_secmem_mem_share (GstMemory * gmem, gssize offset, gssize size)
 }
 
 GstAllocator *
-gst_secmem_allocator_new_ex (uint8_t decoder_format, uint32_t reserved) {
+gst_secmem_allocator_new_ex(uint8_t decoder_format, uint32_t reserved)
+{
     unsigned int ret;
     uint32_t flag;
     GstAllocator *alloc;
@@ -240,17 +241,18 @@ gst_secmem_allocator_new (gboolean is_4k, uint8_t decoder_format)
     self->is_vp9 = decoder_format == SECMEM_DECODER_VP9 ? TRUE: FALSE;
     self->is_av1 = decoder_format == SECMEM_DECODER_AV1 ? TRUE : FALSE;
 
-
     ret = Secure_V2_SessionCreate(&self->sess);
     g_return_val_if_fail(ret == 0, alloc);
-    flag = is_4k ? 2 : 1;
+    flag = is_4k ? SECMEM_V2_FLAGS_TVP(SECMEM_TVP_TYPE_UHD) : SECMEM_V2_FLAGS_TVP(SECMEM_TVP_TYPE_FHD);
     if (self->is_vp9) {
-        flag |= 0x09 << 4;
+        flag |= SECMEM_V2_FLAGS_CODEC(SECMEM_CODEC_VP9);
+    } else if (self->is_av1) {
+        flag |= SECMEM_V2_FLAGS_CODEC(SECMEM_CODEC_AV1);
     }
-    else if (self->is_av1)
-    {
-        flag |= 0x0A << 4;
+    if (decoder_format == SECMEM_DECODER_MPEGTS) {
+        flag |= 1 << 8;
     }
+
     ret = Secure_V2_Init(self->sess, 1, flag, 0, 0);
     g_return_val_if_fail(ret == 0, alloc);
     GST_INFO("secmem init return %d, flag %x", ret, flag);
