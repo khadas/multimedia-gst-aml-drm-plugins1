@@ -21,17 +21,14 @@ plugin_init (GstPlugin * plugin)
     return ret;
 }
 
-#define PACKAGE "gst-aml-drm-plugins"
-#define GST_PACKAGE_ORIGIN "http://amlogic.com"
-
 GST_PLUGIN_DEFINE (
     GST_VERSION_MAJOR,
     GST_VERSION_MINOR,
     ge2d,
     "Amlogic plugin for ge2d",
     plugin_init,
-    VERSION,
-    "LGPL",
-    PACKAGE_NAME,
+    PACKAGE_VERSION,
+    GST_LICENSE,
+    GST_PACKAGE_NAME,
     GST_PACKAGE_ORIGIN
 )

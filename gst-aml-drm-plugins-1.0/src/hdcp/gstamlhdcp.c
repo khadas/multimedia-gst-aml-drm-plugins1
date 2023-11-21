@@ -568,8 +568,8 @@ GST_PLUGIN_DEFINE(
     amlhdcp,
     "Gstreamer HDCP plugin",
     amlhdcp_init,
-    VERSION,
-    "LGPL",
-    "gst-plugins-drmhdcp",
-    "http://amlogic.com/"
+    PACKAGE_VERSION,
+    GST_LICENSE,
+    GST_PACKAGE_NAME,
+    GST_PACKAGE_ORIGIN
 )

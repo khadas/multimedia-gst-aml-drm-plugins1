@@ -430,8 +430,8 @@ GST_PLUGIN_DEFINE(
     dummydrm,
     "Gstreamer Dummy Drm plugin",
     dummydrm_init,
-    VERSION,
-    "LGPL",
-    "gst-aml-drm-plugins",
-    "http://amlogic.com/"
+    PACKAGE_VERSION,
+    GST_LICENSE,
+    GST_PACKAGE_NAME,
+    GST_PACKAGE_ORIGIN
 )

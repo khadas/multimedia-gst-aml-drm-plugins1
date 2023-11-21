@@ -84,7 +84,7 @@ void __attribute__((destructor)) LogModuleTerminate();
 
 // This function is assigned to execute as a library init
 // using __attribute__((constructor))
-static void LogModuleInit()
+void LogModuleInit()
 {
     LOG(eWarning, "GST SVP Logging initialize extending logging set to %d\n", s_VerboseLog);
     const char *env_log_level = getenv("GSTSVPEXT_EXTENDED_LOGGING");
@@ -97,7 +97,7 @@ static void LogModuleInit()
 }
 // This function is assigned to execute as library unload
 // using __attribute__((destructor))
-static void LogModuleTerminate()
+void LogModuleTerminate()
 {
     LOG(eWarning, "GST SVP Logging terminate\n");
 }

@@ -17,5 +17,5 @@ else
 GST_AML_DRM_PLUGINS1_DEPENDENCIES  += libsecmem
 endif
 
-$(eval $(autotools-package))
+$(eval $(meson-package))
 

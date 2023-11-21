@@ -258,8 +258,8 @@ static gboolean CheckFlowControl( GstAllocator *allocator, bool bBlock)
 {
     // Implement flow control.  Wait here until there is room (handles, memory) to proceed.
     gboolean bSecMemSpaceAvailable = false;
-    gint secmemHandles = 0;
-    gint secmemSize = 0;
+    guint secmemHandles = 0;
+    guint secmemSize = 0;
 
     gboolean retVal = gst_secmem_check_free_buf_and_handles_size(allocator, &secmemSize, &secmemHandles);
     if(!retVal) {

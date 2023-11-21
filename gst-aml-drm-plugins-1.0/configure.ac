@@ -32,6 +32,15 @@ GST_API_VERSION=1.0
 AC_SUBST(GST_API_VERSION)
 AC_DEFINE_UNQUOTED(GST_API_VERSION, "$GST_API_VERSION", [GStreamer API Version])
 
+AC_DEFINE_UNQUOTED(GST_LICENSE, "LGPL", [GStreamer license])
+AC_SUBST(GST_LICENSE)
+
+AC_DEFINE_UNQUOTED(GST_PACKAGE_NAME, "Amlogic GStreamer DRM Plug-ins", [GStreamer license])
+AC_SUBST(GST_PACKAGE_NAME)
+
+AC_DEFINE_UNQUOTED(GST_PACKAGE_ORIGIN, "https://www.amlogic.com", [GStreamer license])
+AC_SUBST(GST_LIGST_PACKAGE_ORIGINCENSE)
+
 dnl Check for the required version of GStreamer core (and gst-plugins-base)
 dnl This will export GST_CFLAGS and GST_LIBS variables for use in Makefile.am
 dnl

@@ -1,3 +1,6 @@
+#ifdef HAVE_CONFIG_H
+#  include <config.h>
+#endif
 #include "gst_svp_payload.h"
 #include <gst_svp_meta.h>
 #include "gstsecmemallocator.h"
@@ -218,8 +221,6 @@ static gboolean svp_payload_plugin_init (GstPlugin * plugin)
                                 svp_payload_get_type());
 }
 
-#define PACKAGE_ORIGIN "http://amlogic.com/"
-#define PACKAGE "gst_aml_svp_ext"
 
 GST_PLUGIN_DEFINE (
     GST_VERSION_MAJOR,
@@ -227,7 +228,8 @@ GST_PLUGIN_DEFINE (
     amlsvppayload,
     "Transfers media into SVP memory",
     svp_payload_plugin_init,
-    "0.1",
-    "LGPL",
-    PACKAGE,
-    PACKAGE_ORIGIN )
+    PACKAGE_VERSION,
+    GST_LICENSE,
+    GST_PACKAGE_NAME,
+    GST_PACKAGE_ORIGIN
+)
