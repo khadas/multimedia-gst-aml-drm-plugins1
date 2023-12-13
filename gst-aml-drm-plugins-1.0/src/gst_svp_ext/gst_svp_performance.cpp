@@ -116,7 +116,6 @@ static void PerfModuleTerminate()
     auto it = s_ProcessMap.find(pID);
     if(it == s_ProcessMap.end()) {
         LOG(eError, "Could not find Process ID %X for reporting\n", (uint32_t)pID);
-        return;
     }
     else {
         delete it->second;
