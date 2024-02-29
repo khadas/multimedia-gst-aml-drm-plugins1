@@ -1929,6 +1929,7 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
   GstBuffer *buffer;
   GstEvent *event;
   GstFlowReturn ret;
+  gboolean csd_from_codec = FALSE;
 
   h264parse = GST_H264_SEC_PARSE (parse);
 
@@ -1981,10 +1982,13 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
       gst_buffer_map(h264parse->codec_data_in, &map, GST_MAP_READ);
       rc = gst_secmem_parse_avcc(mem, map.data, map.size);
       gst_buffer_unmap(h264parse->codec_data_in, &map);
-      if (!rc)
+      if (!rc) {
         GST_ERROR_OBJECT(parse, "gst_secmem_parse_avcc fail");
-      else
+      } else {
+        GST_INFO_OBJECT(parse, "Need update csd from codec");
+        csd_from_codec = TRUE;
         gst_buffer_replace(&h264parse->codec_data_in, NULL);
+      }
     }
 
     /* convert avc format to stream format. */
@@ -1996,11 +2000,11 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
 #endif
       return GST_FLOW_ERROR;
     } else
-      GST_LOG_OBJECT(parse, "gst_secmem_parse_avc2nalu success, %x buffer:%p", flag, buffer);
+      GST_LOG_OBJECT(parse, "gst_secmem_parse_avc2nalu success, %x buffer:%p flag %x", flag, buffer, flag);
 
     if ((flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN))
         && !(flag & (PARSER_H264_IDR_SEEN | PARSER_H264_SLICE_SEEN))) {
-      GST_WARNING_OBJECT(h264parse, "frame dropped push_codec:%d", h264parse->push_codec);
+      GST_WARNING_OBJECT(h264parse, "frame dropped push_codec:%d flag %x", h264parse->push_codec, flag);
       return GST_BASE_PARSE_FLOW_DROPPED;
     }
 
@@ -2010,15 +2014,24 @@ gst_h264_sec_parse_pre_push_frame (GstBaseParse * parse, GstBaseParseFrame * fra
         GST_DEBUG_OBJECT(h264parse, "prepend csd");
         ret = gst_secmem_prepend_csd(mem);
         if (!ret) {
-          GST_ERROR_OBJECT(h264parse, "gst_secmem_prepend_csd failed");
+          GST_ERROR_OBJECT(h264parse, "gst_secmem_prepend_csd failed flag %x", flag);
           return FALSE;
         }
         h264parse->push_codec = FALSE;
       } else if (!(flag & PARSER_H264_IDR_SEEN)) {
-        GST_WARNING_OBJECT(h264parse, "frame dropped buffer:%p", buffer);
+        GST_WARNING_OBJECT(h264parse, "frame dropped buffer:%p flag %x", buffer, flag);
         return GST_BASE_PARSE_FLOW_DROPPED;
       } else if (flag & PARSER_H264_IDR_SEEN) {
-        GST_DEBUG_OBJECT(h264parse, "SPS/PPS in stream");
+        GST_DEBUG_OBJECT(h264parse, "SPS/PPS in stream flag %x", flag);
+        if (csd_from_codec && (flag & (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN)) !=
+          (PARSER_H264_SPS_SEEN | PARSER_H264_PPS_SEEN)) {
+          ret = gst_secmem_prepend_csd(mem);
+          if (!ret) {
+            GST_ERROR_OBJECT(h264parse, "gst_secmem_prepend_csd failed flag %x", flag);
+            return FALSE;
+          }
+        }
+        csd_from_codec = FALSE;
         h264parse->push_codec = FALSE;
       }
     }
